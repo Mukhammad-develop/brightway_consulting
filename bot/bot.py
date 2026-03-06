@@ -33,7 +33,7 @@ from django.conf import settings
 
 from .messages import t, get_all_languages, LANG_CALLBACKS, get_service_name
 from .services import (
-    detect_service, ai_detect_service, ask_ai, get_ai_response,
+    ai_detect_service, ask_ai, get_ai_response,
     transcribe_voice, update_user_profile, should_update_profile,
     get_fallback_response, READY_FOR_CONSULTANT_MARKER,
     suggest_document_name, parse_filename_from_response,
@@ -519,15 +519,9 @@ def handle_text_message(message):
         state = get_conversation_state(message.from_user.id)
         current_service = state.get('service')
         
-        # Detect service from message if not already in a service flow
+        # Detect service from message if not already in a service flow (AI only)
         if not current_service:
-            # Try keyword detection first (fast)
-            detected_service = detect_service(text)
-            
-            # If no keyword match and message is substantial, try AI detection
-            if not detected_service and len(text) > 20:
-                detected_service = ai_detect_service(text)
-            
+            detected_service = ai_detect_service(text)
             current_service = detected_service or 'general'
         
         # Update conversation state

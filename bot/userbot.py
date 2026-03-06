@@ -36,7 +36,7 @@ from telethon.tl.types import (
 
 from .messages import t, get_all_languages, LANG_CALLBACKS
 from .services import (
-    detect_service, ask_ai, update_user_profile, should_update_profile,
+    ai_detect_service, ask_ai, update_user_profile, should_update_profile,
     suggest_document_name, parse_filename_from_response,
     READY_FOR_CONSULTANT_MARKER,
 )
@@ -437,8 +437,8 @@ def register_handlers(client: TelegramClient, account_index: int):
             
             lang = user.language_code if user else 'en'
             
-            # Detect service (Django ORM — must run in thread from async context)
-            detected = await run_sync(lambda: detect_service(text))
+            # Detect service with AI (Django ORM — must run in thread from async context)
+            detected = await run_sync(lambda: ai_detect_service(text))
             
             # Get or create case (do not add user message yet — we may send opening first)
             case = await run_sync(lambda: _get_or_open_case(user, detected or 'general'))

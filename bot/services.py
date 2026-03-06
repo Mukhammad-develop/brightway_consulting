@@ -50,22 +50,6 @@ _rate_limit = {
     'last_calls': [],  # timestamps of recent calls
 }
 
-# Cache for service keywords
-_service_cache = {
-    'data': None,
-    'timestamp': 0,
-    'ttl': 60  # Refresh every 60 seconds
-}
-
-# Fallback hardcoded keywords (used when no DB services defined)
-SERVICE_KEYWORDS = {
-    'student': ['student', 'visa', 'university', 'uni', 'talaba', 'viza', 'студент', 'виза', 'университет', 'учеба'],
-    'paye': ['paye', 'employed', 'p60', 'p45', 'refund', 'hmrc', 'ish haqi', 'возврат', 'налог', 'работодатель'],
-    'schengen': ['schengen', 'shengen', 'schengen visa', 'evisa', 'sharecode', 'yashash manzili', 'шенген', 'виза шенген'],
-    'self': ['self employed', 'freelance', 'utr', 'self assessment', 'mustaqil', 'самозанятый', 'фриланс'],
-    'company': ['company', 'limited', 'ltd', 'accounting', 'vat', 'kompaniya', 'компания', 'бухгалтерия'],
-}
-
 # Hardcoded service info (fallback)
 SERVICE_INFO = {
     'student': {
@@ -215,82 +199,22 @@ def get_ai_usage_stats():
     }
 
 
-# ============== Service Detection ==============
-
-def _load_services_from_db():
-    """Load active services from database."""
-    from core.models import ServiceDefinition
-    
-    services = {}
-    try:
-        for svc in ServiceDefinition.objects.filter(is_active=True):
-            keywords = svc.get_keywords_list()
-            if keywords:
-                services[svc.slug] = keywords
-    except Exception as e:
-        logger.error(f"Error loading services from DB: {e}")
-    
-    return services
-
-
-def _get_cached_services():
-    """Get cached services or refresh from DB."""
-    now = time.time()
-    
-    if _service_cache['data'] is None or (now - _service_cache['timestamp']) > _service_cache['ttl']:
-        db_services = _load_services_from_db()
-        if db_services:
-            _service_cache['data'] = db_services
-        else:
-            _service_cache['data'] = SERVICE_KEYWORDS
-        _service_cache['timestamp'] = now
-    
-    return _service_cache['data']
-
-
-def detect_service(text: str) -> str:
-    """
-    Detect which service the user is asking about based on keywords.
-    Fast keyword-based detection.
-    
-    Args:
-        text: User message text
-        
-    Returns:
-        Service slug (student, paye, schengen, self, company) or None
-    """
-    if not text:
-        return None
-    
-    text_lower = text.lower()
-    services = _get_cached_services()
-    
-    for service, keywords in services.items():
-        for keyword in keywords:
-            if keyword.lower() in text_lower:
-                return service
-    
-    return None
-
+# ============== Service Detection (AI only) ==============
 
 def ai_detect_service(text: str, conversation_history: list = None) -> str:
     """
-    Use AI to detect which service the user needs.
-    More accurate but slower than keyword matching.
+    Use AI to detect which service the user needs from their message.
     
     Args:
         text: User message text
         conversation_history: Optional conversation context
         
     Returns:
-        Service slug or None
+        Service slug or None (general)
     """
-    # First try keyword detection (fast)
-    keyword_result = detect_service(text)
-    if keyword_result:
-        return keyword_result
+    if not (text and text.strip()):
+        return None
     
-    # Use AI for more nuanced detection
     client = get_openai_client()
     if not client:
         return None
@@ -1196,11 +1120,6 @@ def test_ai_prompt(system_prompt: str, user_message: str) -> str:
 
 
 # ============== Cache Management ==============
-
-def invalidate_service_cache():
-    """Force refresh of service cache on next access."""
-    _service_cache['timestamp'] = 0
-
 
 # ============== Conversation Management Helpers ==============
 
