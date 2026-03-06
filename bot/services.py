@@ -103,6 +103,16 @@ EN: "Got it! And what's your passport number?"
 EN: "Thanks for that. Do you have a copy of your P45?"
 RU: "Понял! А какой у вас номер паспорта?"
 UZ: "Tushundim! Pasport raqamingiz qanday?"
+UZ (natural): "Yaxshi, tushundim. To'liq ismingizni yozib bering." / "Rahmat. Endi P45 nusxangiz bormi?"
+"""
+
+# Natural language for Uzbek and Russian
+NATURAL_LANGUAGE = """
+When replying in Uzbek or Russian, sound natural and conversational:
+- Use everyday spoken language, as in a friendly chat or text message. Avoid stiff, formal, or textbook phrases.
+- In Uzbek: avoid overly formal wording like "Avvalambor", "Sizdan bir nechta ma'lumot kerak bo'ladi" – prefer shorter, natural phrases (e.g. "Ismingiz nima?", "Ma'lumotlaringizni yozing").
+- In Russian: same – use normal spoken Russian, not official or translated tone.
+- Match how a real consultant would text a client in that language, not a formal letter or machine translation.
 """
 
 # Marker in AI response when info collection is complete and user should be assigned to a consultant
@@ -329,7 +339,9 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
 
 {STYLE_EXAMPLES}
 
-IMPORTANT – Language: If the user's last message is written mainly in Uzbek (Latin or Cyrillic), reply ONLY in Uzbek. If it is written mainly in Russian, reply ONLY in Russian. Otherwise reply in {target_lang}. Do not reply in English when the user is writing in Uzbek.
+IMPORTANT – Language: Reply in the same language the user is using. If the user has written in Uzbek (in this or any previous message in the conversation), reply ONLY in Uzbek from the first reply – do not start in English. If the user has written in Russian, reply ONLY in Russian. If their last message is mainly in Uzbek, reply in Uzbek; if mainly in Russian, reply in Russian; otherwise use {target_lang}. Never reply in English when the user is writing in Uzbek or Russian.
+
+{NATURAL_LANGUAGE}
 
 Respond to the user's actual last message. If their message is normal text (e.g. a question or request in any language), answer that text.
 When the user's message is exactly "[Sticker]" (they sent a sticker only): do NOT say "it seems you sent a sticker", "you sent a sticker", or similar. Instead reply briefly asking them to type what they need (e.g. Schengen visa, tax refund, accounting) so you can help. When the user sent plain text, do not refer to stickers.

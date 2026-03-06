@@ -105,13 +105,15 @@ application = get_wsgi_application()
 
    Save.
 
-4. **Static files** (scroll down):
+4. **Static files** (scroll down):  
+   You need **two** mappings. Use your real username instead of `yourusername`.
    - **URL**: `/static/`  
-     **Directory**: `/home/yourusername/brightway_consulting/staticfiles`
+     **Directory**: `/home/yourusername/brightway_consulting/staticfiles`  
+     (Do **not** point `/static/` at `uploads` – that breaks CSS/JS and can show a big blue circle or broken layout.)
    - **URL**: `/uploads/`  
      **Directory**: `/home/yourusername/brightway_consulting/uploads`
 
-5. **Reload** the web app (green button).
+   After changing, **Reload** the web app (green button).
 
 ---
 
