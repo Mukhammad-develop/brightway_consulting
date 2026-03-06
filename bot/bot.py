@@ -232,10 +232,10 @@ def try_assign_case_to_consultant(case, user):
         logger.info(f"Case #{case.pk} assigned to consultant {consultant.username}")
 
 
-def process_ai_response(user, case, text: str, lang: str):
+def process_ai_response(user, case, text: str, lang: str, send_reply: bool = True):
     """
     Process user message and get AI response with error handling.
-    Also triggers profile extraction periodically.
+    When send_reply=False, only stores the user message (and optionally opening) — no AI call, no return value sent.
     When AI is disabled for the case, only stores the user message and returns None (no reply sent).
     When AI signals [READY_FOR_CONSULTANT], assigns case to a consultant and turns AI off for this case.
     Returns (response_str, filename_label or None). If AI suggested FILENAME: label, filename_label is set.
@@ -245,6 +245,9 @@ def process_ai_response(user, case, text: str, lang: str):
 
     # If AI is turned off for this case, do not call AI; no reply sent
     if not getattr(case, 'ai_enabled', True):
+        return (None, None)
+
+    if not send_reply:
         return (None, None)
 
     # Get AI response
@@ -527,6 +530,17 @@ def handle_text_message(message):
         if case.service == 'general' and current_service != 'general':
             case.service = current_service
             case.save(update_fields=['service'])
+        
+        # New user (no prior messages): send only the opening message; AI replies when they answer that
+        from bot.messages import OPENING_MESSAGE
+        conv = case.get_conversation()
+        if len(conv) == 0:
+            case.add_message('assistant', OPENING_MESSAGE)
+            bot.send_message(message.chat.id, OPENING_MESSAGE)
+            # Store user's first message; no AI reply yet — they get AI after replying to the opening
+            process_ai_response(user, case, text, lang, send_reply=False)
+            logger.info(f"First message from {user.telegram_id}: sent opening only")
+            return
         
         # Send typing indicator
         bot.send_chat_action(message.chat.id, 'typing')

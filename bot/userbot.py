@@ -416,13 +416,21 @@ def register_handlers(client: TelegramClient, account_index: int):
             # Detect service
             detected = detect_service(text)
             
-            # Get or create case
-            def get_case():
-                case = _get_or_open_case(user, detected or 'general')
-                case.add_message('user', text)
-                return case
+            # Get or create case (do not add user message yet — we may send opening first)
+            case = await run_sync(lambda: _get_or_open_case(user, detected or 'general'))
+            conv = case.get_conversation()
+            is_first_message = len(conv) == 0
+            # New user (no prior messages / no imported chat): send only the opening; AI replies when they answer
+            if is_first_message:
+                from bot.messages import OPENING_MESSAGE
+                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', OPENING_MESSAGE))
+                await event.respond(OPENING_MESSAGE)
+            await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
 
-            case = await run_sync(get_case)
+            # After first message we only sent the opening — no AI reply until user replies to it
+            if is_first_message:
+                logger.info(f"[Account {account_index}] First message from {sender.id}: sent opening only")
+                return
 
             # If AI is turned off for this case, no reply (consultant will reply later)
             if not getattr(case, 'ai_enabled', True):
