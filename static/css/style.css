@@ -1670,17 +1670,41 @@ section {
 /* ==================== Responsive ==================== */
 @media (max-width: 600px) {
     .hero {
-        padding: 100px 20px 60px;
+        padding: 100px 20px 80px;
+        justify-content: flex-start;
+        min-height: auto;
+    }
+    
+    .hero-content {
+        flex: 1 0 auto;
+        margin-bottom: 0;
     }
     
     .hero-stats {
         flex-direction: column;
-        gap: 24px;
+        gap: 28px;
+        margin-bottom: 32px;
+        padding: 0 8px;
+    }
+    
+    .hero-stat {
+        padding: 4px 0;
     }
     
     .hero-stat-divider {
         width: 60px;
         height: 1px;
+    }
+    
+    /* Scroll hint: flow below stats on mobile so it never overlaps */
+    .hero-scroll {
+        position: static;
+        transform: none;
+        left: auto;
+        bottom: auto;
+        margin-top: 24px;
+        margin-bottom: 24px;
+        gap: 16px;
     }
     
     .hero-cta {
