@@ -102,8 +102,23 @@ def get_unread_notification_count(admin_id):
 def session_ctx(request):
     """
     Get session context for templates.
+    Ensures theme is in session (load from AdminUser if DB admin and missing).
     """
     admin_id = request.session.get('admin_id')
+    # Sync theme from DB if we have admin_id but no theme in session
+    if admin_id and 'theme_mode' not in request.session:
+        try:
+            from core.models import AdminUser
+            a = AdminUser.objects.get(pk=admin_id, is_active=True)
+            request.session['theme_mode'] = getattr(a, 'theme_mode', 'dark')
+            request.session['theme_dark'] = getattr(a, 'theme_dark', 'blue')
+            request.session['theme_light'] = getattr(a, 'theme_light', 'blue')
+        except Exception:
+            request.session.setdefault('theme_mode', 'dark')
+            request.session.setdefault('theme_dark', 'blue')
+            request.session.setdefault('theme_light', 'blue')
+    theme_mode = request.session.get('theme_mode', 'dark')
+    theme_name = request.session.get('theme_dark', 'blue') if theme_mode == 'dark' else request.session.get('theme_light', 'blue')
     return {
         'session_admin_logged_in': request.session.get('admin_logged_in', False),
         'session_admin_username': request.session.get('admin_username', ''),
@@ -113,6 +128,8 @@ def session_ctx(request):
         'is_master': is_master(request),
         'is_elevated': is_elevated(request),
         'unread_notifications': get_unread_notification_count(admin_id),
+        'theme_mode': theme_mode,
+        'theme_name': theme_name,
     }
 
 

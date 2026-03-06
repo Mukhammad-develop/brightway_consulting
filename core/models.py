@@ -177,6 +177,9 @@ class AdminUser(models.Model):
     display_name = models.CharField(max_length=100, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    theme_mode = models.CharField(max_length=10, default='dark')  # 'dark' | 'light'
+    theme_dark = models.CharField(max_length=20, default='blue')  # color theme when dark
+    theme_light = models.CharField(max_length=20, default='blue')  # color theme when light
     created_at = models.DateTimeField(default=datetime.now)
     last_login = models.DateTimeField(null=True, blank=True)
     

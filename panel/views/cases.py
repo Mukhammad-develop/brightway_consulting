@@ -12,8 +12,8 @@ from django.db.models import Q
 
 from django.http import JsonResponse
 
-from core.models import TgUser, Case, Document, Payment, ServiceDefinition, AdminAssignment
-from ..decorators import login_required
+from core.models import TgUser, Case, Document, Payment, ServiceDefinition, AdminAssignment, ImportRequest
+from ..decorators import login_required, elevated_required
 from .helpers import session_ctx, get_file_refs_for_conversation, build_conversation_display, get_current_admin, is_elevated
 
 
@@ -291,3 +291,22 @@ def case_toggle_ai(request, case_id):
     case.ai_enabled = not case.ai_enabled
     case.save(update_fields=['ai_enabled'])
     return JsonResponse({'ok': True, 'ai_enabled': case.ai_enabled})
+
+
+@login_required
+@elevated_required
+def case_reimport_chat(request, case_id):
+    """
+    Queue re-import of chat for this case's user. Replaces conversation on the active case when userbot runs.
+    """
+    case = get_object_or_404(Case.objects.select_related('user'), pk=case_id)
+    if not _consultant_can_access_case(request, case):
+        messages.error(request, 'Access denied.')
+        return redirect('panel:cases_list')
+    ImportRequest.objects.create(
+        user_tg_id=str(case.user.telegram_id),
+        label=f"Re-import Case #{case.pk}",
+        status='pending'
+    )
+    messages.success(request, f'Re-import queued for user {case.user.telegram_id}. Go to Import Chat to see status.')
+    return redirect('panel:import_chat')

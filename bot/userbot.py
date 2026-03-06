@@ -132,6 +132,15 @@ def _get_or_open_case(user, service='general'):
     return case
 
 
+def _telegram_message_role(msg) -> str:
+    """
+    Map Telethon message direction to conversation role. Single source of truth to prevent swapped attribution.
+    - msg.out True  = we (userbot) sent it → 'assistant'
+    - msg.out False = they (client) sent it → 'user'
+    """
+    return 'assistant' if getattr(msg, 'out', False) else 'user'
+
+
 def _add_message_to_case(case_id: int, role: str, content: str, sender: str = None):
     """Add message to case conversation."""
     from core.models import Case
@@ -653,7 +662,7 @@ async def fetch_and_save_chat(client: TelegramClient, user_tg_id: str, limit: in
         for msg in messages:
             if not msg.text and not msg.media:
                 continue
-            role = 'user' if msg.out else 'assistant'
+            role = _telegram_message_role(msg)
             content = msg.text or "[media attachment]"
             conversation.append({
                 'role': role,
@@ -671,14 +680,21 @@ async def fetch_and_save_chat(client: TelegramClient, user_tg_id: str, limit: in
                 telegram_id=tg_id,
                 defaults={'language_code': 'en'}
             )
-            # Any import = prior chat or added by assistant → AI off for this case
-            case = Case.objects.create(
-                user=user,
-                service='general',
-                status='active',
-                conversation_history=json.dumps(conversation),
-                ai_enabled=False
-            )
+            # Re-import: replace conversation on existing active case so we don't create duplicates and can fix bad data
+            existing = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
+            if existing:
+                existing.conversation_history = json.dumps(conversation)
+                existing.ai_enabled = False
+                existing.save(update_fields=['conversation_history', 'ai_enabled', 'updated_at'])
+                case = existing
+            else:
+                case = Case.objects.create(
+                    user=user,
+                    service='general',
+                    status='active',
+                    conversation_history=json.dumps(conversation),
+                    ai_enabled=False
+                )
             if import_req_id:
                 req = ImportRequest.objects.get(pk=import_req_id)
                 req.status = 'done'
@@ -748,20 +764,19 @@ async def import_chat(client: TelegramClient, user_tg_id: str, limit: int = 100)
         # Reverse to chronological order
         messages = list(reversed(messages))
         
-        # Build conversation
+        # Build conversation (same role rule as fetch_and_save_chat)
         conversation = []
         for msg in messages:
             if not msg.text:
                 continue
-            
-            role = 'user' if not msg.out else 'assistant'
+            role = _telegram_message_role(msg)
             conversation.append({
                 'role': role,
                 'content': msg.text,
                 'timestamp': msg.date.isoformat() if msg.date else datetime.now().isoformat()
             })
         
-        # Save
+        # Save: replace existing active case conversation for re-import, else create new case
         def save():
             tg_id = int(user_tg_id) if user_tg_id.isdigit() else 0
             if not tg_id:
@@ -771,14 +786,17 @@ async def import_chat(client: TelegramClient, user_tg_id: str, limit: int = 100)
                 telegram_id=tg_id,
                 defaults={'language_code': 'en'}
             )
-            
-            Case.objects.create(
-                user=user,
-                service='general',
-                status='active',
-                conversation_history=json.dumps(conversation)
-            )
-            
+            existing = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
+            if existing:
+                existing.conversation_history = json.dumps(conversation)
+                existing.save(update_fields=['conversation_history', 'updated_at'])
+            else:
+                Case.objects.create(
+                    user=user,
+                    service='general',
+                    status='active',
+                    conversation_history=json.dumps(conversation)
+                )
             return {'ok': True, 'count': len(conversation)}
         
         result = await run_sync(save)

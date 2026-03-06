@@ -112,7 +112,7 @@
                     <h3>Conversation</h3>
                     {% if active_case %}
                     <span class="badge badge-{{ active_case.service }}">Case #{{ active_case.pk }}</span>
-                    <span class="chat-ai-toggle" id="chatAiToggle">
+                    <span class="chat-ai-toggle ai-state-{% if active_case.ai_enabled %}on{% else %}off{% endif %}" id="chatAiToggle">
                         <span class="ai-status" id="aiStatus">AI: {{ active_case.ai_enabled|yesno:"On,Off" }}</span>
                         <button type="button" class="btn btn-sm btn-outline" id="aiToggleBtn" data-case-id="{{ active_case.pk }}" data-toggle-url="{% url 'panel:case_toggle_ai' active_case.pk %}" title="Turn AI responses on or off for this chat">Toggle AI</button>
                     </span>
@@ -411,10 +411,12 @@
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
             body: '{}'
-        }).then(function(r) { return r.json(); }).then(function(data) {
+        }).then(function(r) { return r.json();         }).then(function(data) {
             if (data.ok) {
                 var statusEl = document.getElementById('aiStatus');
+                var wrap = document.getElementById('chatAiToggle');
                 if (statusEl) statusEl.textContent = data.ai_enabled ? 'AI: On' : 'AI: Off';
+                if (wrap) { wrap.classList.remove('ai-state-on', 'ai-state-off'); wrap.classList.add(data.ai_enabled ? 'ai-state-on' : 'ai-state-off'); }
             } else alert(data.error || 'Failed to toggle');
         }).catch(function() { alert('Request failed'); }).finally(function() { btn.disabled = false; });
     });

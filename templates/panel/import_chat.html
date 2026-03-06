@@ -25,7 +25,8 @@
             <ul class="info-list">
                 <li>The userbot must be running (<code>python manage.py run_userbot</code>)</li>
                 <li>Enter the Telegram ID or username of the user</li>
-                <li>Messages will be imported into a new case</li>
+                <li>If the user already has an <strong>active case</strong>, the import <strong>replaces</strong> that case’s conversation (re-import fixes wrong message attribution)</li>
+                <li>Otherwise a new case is created with the imported history</li>
                 <li>Only text messages are imported (media shows as placeholder)</li>
             </ul>
         </div>

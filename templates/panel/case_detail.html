@@ -4,6 +4,12 @@
 {% block page_title_header %}Case #{{ case.pk }}{% endblock %}
 
 {% block topbar_actions %}
+{% if is_elevated %}
+<form action="{% url 'panel:case_reimport_chat' case.pk %}" method="post" style="display:inline;">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline" title="Queue chat re-import from Telegram for this user (replaces conversation on this case)">Re-import chat</button>
+</form>
+{% endif %}
 <a href="{% url 'panel:case_edit' case.pk %}" class="btn btn-outline">Edit Case</a>
 <a href="{% url 'panel:cases_list' %}" class="btn btn-text">← Back to Cases</a>
 {% endblock %}
@@ -53,7 +59,7 @@
                         </div>
                         <div class="info-item">
                             <span class="info-label">AI in chat</span>
-                            <span class="info-value">
+                            <span class="info-value ai-state-{% if case.ai_enabled %}on{% else %}off{% endif %}" id="caseAiToggleWrap">
                                 <span class="ai-status" id="caseAiStatus">{% if case.ai_enabled %}On{% else %}Off{% endif %}</span>
                                 <button type="button" class="btn btn-sm btn-outline" id="caseAiToggleBtn" data-toggle-url="{% url 'panel:case_toggle_ai' case.pk %}">Toggle AI</button>
                             </span>
@@ -217,7 +223,9 @@ document.getElementById('caseAiToggleBtn')?.addEventListener('click', function()
     }).then(function(r) { return r.json(); }).then(function(data) {
         if (data.ok) {
             var el = document.getElementById('caseAiStatus');
+            var wrap = document.getElementById('caseAiToggleWrap');
             if (el) el.textContent = data.ai_enabled ? 'On' : 'Off';
+            if (wrap) { wrap.classList.remove('ai-state-on', 'ai-state-off'); wrap.classList.add(data.ai_enabled ? 'ai-state-on' : 'ai-state-off'); }
         } else alert(data.error || 'Failed to toggle');
     }).catch(function() { alert('Request failed'); }).finally(function() { btn.disabled = false; });
 });

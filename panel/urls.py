@@ -11,6 +11,8 @@ urlpatterns = [
     # Authentication
     path('admin/login', auth.login_view, name='login'),
     path('admin/logout', auth.logout_view, name='logout'),
+    path('admin/profile', auth.profile_view, name='profile'),
+    path('admin/theme-toggle', auth.theme_toggle_view, name='theme_toggle'),
     
     # Dashboard
     path('admin', dashboard.dashboard, name='dashboard'),
@@ -40,6 +42,7 @@ urlpatterns = [
     path('admin/cases/<int:case_id>/edit', cases.case_edit, name='case_edit'),
     path('admin/cases/<int:case_id>/update', cases.case_update, name='case_update'),
     path('admin/cases/<int:case_id>/toggle-ai', cases.case_toggle_ai, name='case_toggle_ai'),
+    path('admin/cases/<int:case_id>/reimport-chat', cases.case_reimport_chat, name='case_reimport_chat'),
 
     # Files Management
     path('admin/files', files.files_list, name='files_list'),

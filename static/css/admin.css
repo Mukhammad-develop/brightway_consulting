@@ -29,6 +29,104 @@
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
     --transition: 0.3s ease;
+    --border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ==================== Theme variants (data-theme + data-theme-name on body) ==================== */
+/* Dark – default (matches :root) */
+body[data-theme="dark"][data-theme-name="default"] { /* same as :root, no overrides */ }
+
+/* Dark – blue */
+body[data-theme="dark"][data-theme-name="blue"] {
+    --accent-primary: #3b82f6;
+    --accent-secondary: #1e40af;
+    --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+/* Dark – green */
+body[data-theme="dark"][data-theme-name="green"] {
+    --accent-primary: #10b981;
+    --accent-secondary: #047857;
+    --accent-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+/* Dark – purple */
+body[data-theme="dark"][data-theme-name="purple"] {
+    --accent-primary: #8b5cf6;
+    --accent-secondary: #5b21b6;
+    --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+/* Light – default */
+body[data-theme="light"][data-theme-name="default"] {
+    --bg-primary: #f4f4f8;
+    --bg-secondary: #e8e8f0;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8f8fc;
+    --bg-elevated: #ffffff;
+    --text-primary: #1a1a24;
+    --text-secondary: #4a4a5a;
+    --text-muted: #6b6b80;
+    --accent-primary: #e94560;
+    --accent-secondary: #0f3460;
+    --accent-gradient: linear-gradient(135deg, #e94560 0%, #533483 100%);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.12);
+    --border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Light – blue */
+body[data-theme="light"][data-theme-name="blue"] {
+    --bg-primary: #f4f4f8;
+    --bg-secondary: #e8e8f0;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8f8fc;
+    --bg-elevated: #ffffff;
+    --text-primary: #1a1a24;
+    --text-secondary: #4a4a5a;
+    --text-muted: #6b6b80;
+    --accent-primary: #3b82f6;
+    --accent-secondary: #1e40af;
+    --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.12);
+    --border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Light – green */
+body[data-theme="light"][data-theme-name="green"] {
+    --bg-primary: #f4f4f8;
+    --bg-secondary: #e8e8f0;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8f8fc;
+    --bg-elevated: #ffffff;
+    --text-primary: #1a1a24;
+    --text-secondary: #4a4a5a;
+    --text-muted: #6b6b80;
+    --accent-primary: #10b981;
+    --accent-secondary: #047857;
+    --accent-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.12);
+    --border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* Light – purple */
+body[data-theme="light"][data-theme-name="purple"] {
+    --bg-primary: #f4f4f8;
+    --bg-secondary: #e8e8f0;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8f8fc;
+    --bg-elevated: #ffffff;
+    --text-primary: #1a1a24;
+    --text-secondary: #4a4a5a;
+    --text-muted: #6b6b80;
+    --accent-primary: #8b5cf6;
+    --accent-secondary: #5b21b6;
+    --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.12);
+    --border-color: rgba(0, 0, 0, 0.08);
 }
 
 /* ==================== Reset ==================== */
@@ -1465,6 +1563,80 @@ button {
     margin-top: 12px;
 }
 
+/* Profile page */
+.profile-page .panel-card {
+    margin-bottom: 1.5rem;
+}
+
+.theme-mode-row {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.radio-label input {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: var(--accent-primary);
+}
+
+.form-hint {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+.profile-master-note {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    padding: 0.75rem 1rem;
+    background: var(--bg-elevated);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+/* AI toggle visibility: red when off, green when on */
+.chat-ai-toggle.ai-state-off .ai-status,
+.info-value.ai-state-off .ai-status {
+    color: var(--color-error);
+    font-weight: 600;
+}
+.chat-ai-toggle.ai-state-off .btn,
+.info-value.ai-state-off .btn {
+    border-color: var(--color-error);
+    color: var(--color-error);
+}
+.chat-ai-toggle.ai-state-off .btn:hover,
+.info-value.ai-state-off .btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--color-error);
+}
+
+.chat-ai-toggle.ai-state-on .ai-status,
+.info-value.ai-state-on .ai-status {
+    color: var(--color-success);
+    font-weight: 600;
+}
+.chat-ai-toggle.ai-state-on .btn,
+.info-value.ai-state-on .btn {
+    border-color: var(--color-success);
+    color: var(--color-success);
+}
+.chat-ai-toggle.ai-state-on .btn:hover,
+.info-value.ai-state-on .btn:hover {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--color-success);
+}
+
 /* File Upload */
 .file-upload-area {
     position: relative;
@@ -1558,6 +1730,33 @@ button {
 /* =============================================================================
    NOTIFICATION BELL STYLES
    ============================================================================= */
+
+.theme-toggle-form {
+    display: inline-block;
+    margin-right: 0.25rem;
+}
+
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    background: transparent;
+    transition: var(--transition);
+}
+
+.theme-toggle-btn:hover {
+    color: var(--accent-primary);
+    background: var(--bg-elevated);
+}
+
+.theme-toggle-btn .theme-icon {
+    width: 22px;
+    height: 22px;
+}
 
 .notification-bell {
     position: relative;
