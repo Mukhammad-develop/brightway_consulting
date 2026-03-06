@@ -436,12 +436,22 @@ def register_handlers(client: TelegramClient, account_index: int):
             if not getattr(case, 'ai_enabled', True):
                 return
 
-            # Get AI response
-            def get_ai_response():
-                conv = case.get_conversation()
-                return ask_ai(conv, case.service, lang)
+            # Show typing while AI is generating (Telegram typing lasts ~5s, repeat every 4s)
+            async def typing_loop():
+                while True:
+                    await client.action(event.chat_id, 'typing')
+                    await asyncio.sleep(4)
 
-            reply = await run_sync(get_ai_response)
+            get_ai_response_sync = lambda: ask_ai(case.get_conversation(), case.service, lang)
+            typing_task = asyncio.create_task(typing_loop())
+            try:
+                reply = await run_sync(get_ai_response_sync)
+            finally:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
 
             if reply:
                 # Strip consultant-assignment marker and auto-disable AI when info collected
@@ -546,7 +556,12 @@ def register_handlers(client: TelegramClient, account_index: int):
             # Acknowledge
             await event.respond(t(lang, msg_key))
 
-            # Get AI response for document/photo/video/voice
+            # Show typing while AI is generating
+            async def typing_loop_media():
+                while True:
+                    await client.action(event.chat_id, 'typing')
+                    await asyncio.sleep(4)
+
             def get_ai_and_maybe_rename():
                 conv = case.get_conversation()
                 reply = ask_ai(conv, case.service, lang)
@@ -558,7 +573,16 @@ def register_handlers(client: TelegramClient, account_index: int):
                     doc.display_name = f"{filename_label}_{sender.id}{ext}"
                     doc.save(update_fields=['display_name'])
                 return cleaned, None
-            reply, _ = await run_sync(get_ai_and_maybe_rename)
+
+            typing_task = asyncio.create_task(typing_loop_media())
+            try:
+                reply, _ = await run_sync(get_ai_and_maybe_rename)
+            finally:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
             if reply:
                 await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', reply))
                 await event.respond(reply)

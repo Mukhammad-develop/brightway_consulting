@@ -14,6 +14,8 @@ import os
 import sys
 import logging
 import uuid
+import threading
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -209,6 +211,15 @@ def update_conversation_state(user_tg_id: int, service: str = None, step: int = 
         _conversation_state[user_tg_id]['step'] = step
 
 
+def _typing_loop(chat_id, stop_event, interval=4):
+    """Run typing action every interval seconds until stop_event is set."""
+    while not stop_event.wait(interval):
+        try:
+            bot.send_chat_action(chat_id, 'typing')
+        except Exception:
+            break
+
+
 def try_assign_case_to_consultant(case, user):
     """
     Assign case to a consultant when AI has finished collecting information.
@@ -216,7 +227,6 @@ def try_assign_case_to_consultant(case, user):
     """
     from django.db.models import Count
     from core.models import AdminUser, AdminAssignment
-    # Pick an active consultant (round-robin: one with fewest assigned cases)
     consultant = (
         AdminUser.objects.filter(role='consultant', is_active=True)
         .annotate(assigned_count=Count('assigned_cases'))
@@ -542,11 +552,18 @@ def handle_text_message(message):
             logger.info(f"First message from {user.telegram_id}: sent opening only")
             return
         
-        # Send typing indicator
-        bot.send_chat_action(message.chat.id, 'typing')
-        
-        # Process and get AI response
-        response, _ = process_ai_response(user, case, text, lang)
+        # Show typing while AI is generating (typing action lasts ~5s, so repeat every 4s)
+        stop_typing = threading.Event()
+        typing_thread = threading.Thread(
+            target=_typing_loop,
+            args=(message.chat.id, stop_typing),
+            daemon=True
+        )
+        typing_thread.start()
+        try:
+            response, _ = process_ai_response(user, case, text, lang)
+        finally:
+            stop_typing.set()
         
         # Send response only if AI replied
         if response:
@@ -639,9 +656,14 @@ def handle_voice_message(message):
                 parse_mode='Markdown'
             )
             
-            # Process transcription as regular message and get AI response
-            bot.send_chat_action(message.chat.id, 'typing')
-            response, filename_label = process_ai_response(user, case, transcription, lang)
+            # Process transcription as regular message and get AI response (typing while AI runs)
+            stop_typing = threading.Event()
+            typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
+            typing_thread.start()
+            try:
+                response, filename_label = process_ai_response(user, case, transcription, lang)
+            finally:
+                stop_typing.set()
             if filename_label:
                 doc.display_name = f"{filename_label}_{user.telegram_id}{ext}"
                 doc.save(update_fields=['display_name'])
@@ -743,9 +765,14 @@ def handle_document(message):
                 case.add_message('user', f"[Audio file transcription]: {transcription}")
                 bot.send_message(message.chat.id, f"🎤 Transcription:\n_{transcription}_", parse_mode='Markdown')
         
-        # Get AI response about the document (user message already added above)
-        bot.send_chat_action(message.chat.id, 'typing')
-        response, filename_label = process_ai_response(user, case, f"[Uploaded document: {original_name}]", lang)
+        # Get AI response about the document (typing while AI runs)
+        stop_typing = threading.Event()
+        typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
+        typing_thread.start()
+        try:
+            response, filename_label = process_ai_response(user, case, f"[Uploaded document: {original_name}]", lang)
+        finally:
+            stop_typing.set()
         if response:
             bot.send_message(message.chat.id, response)
         if filename_label:
@@ -811,9 +838,14 @@ def handle_photo(message):
         # Acknowledge receipt
         bot.send_message(message.chat.id, t(lang, 'photo_received'))
         
-        # Get AI response
-        bot.send_chat_action(message.chat.id, 'typing')
-        response, filename_label = process_ai_response(user, case, "[User uploaded a photo]", lang)
+        # Get AI response (typing while AI runs)
+        stop_typing = threading.Event()
+        typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
+        typing_thread.start()
+        try:
+            response, filename_label = process_ai_response(user, case, "[User uploaded a photo]", lang)
+        finally:
+            stop_typing.set()
         if filename_label:
             doc.display_name = f"{filename_label}_{user.telegram_id}.jpg"
             doc.save(update_fields=['display_name'])
