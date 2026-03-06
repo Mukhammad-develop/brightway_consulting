@@ -124,6 +124,17 @@ class Command(BaseCommand):
                 'display_order': 2,
             },
             {
+                'slug': 'schengen',
+                'name': 'Schengen Visa',
+                'name_ru': 'Шенген виза',
+                'name_uz': 'Shengen viza',
+                'description': 'Assistance with Schengen visa applications: documents, Sharecode, Evisa, proof of address, bank statements.',
+                'keywords': 'schengen,shengen,evisa,sharecode,yashash manzili,шенген,виза',
+                'badge_color': 'general',
+                'icon_emoji': '🇪🇺',
+                'display_order': 3,
+            },
+            {
                 'slug': 'self',
                 'name': 'Self Assessment Tax',
                 'name_ru': 'Налог на самозанятость',
@@ -132,7 +143,7 @@ class Command(BaseCommand):
                 'keywords': 'self employed,freelance,utr,self assessment,mustaqil,самозанятый',
                 'badge_color': 'self',
                 'icon_emoji': '📊',
-                'display_order': 3,
+                'display_order': 4,
             },
             {
                 'slug': 'company',
@@ -143,7 +154,7 @@ class Command(BaseCommand):
                 'keywords': 'company,limited,ltd,accounting,vat,kompaniya,компания',
                 'badge_color': 'company',
                 'icon_emoji': '🏢',
-                'display_order': 4,
+                'display_order': 5,
             },
         ]
         
@@ -188,7 +199,7 @@ class Command(BaseCommand):
 
     def create_cases(self, users):
         """Create sample cases."""
-        services = ['student', 'paye', 'self', 'company', 'general']
+        services = ['student', 'paye', 'schengen', 'self', 'company', 'general']
         statuses = ['active', 'active', 'active', 'completed', 'completed', 'cancelled']
         payment_statuses = ['pending', 'pending', 'received', 'received', 'refunded']
         

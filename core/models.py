@@ -54,6 +54,7 @@ class Case(models.Model):
     SERVICE_CHOICES = [
         ('student', 'Student Visa & University'),
         ('paye', 'PAYE Tax Refund'),
+        ('schengen', 'Schengen Visa'),
         ('self', 'Self Assessment Tax'),
         ('company', 'Company Accounting'),
         ('general', 'General Inquiry'),

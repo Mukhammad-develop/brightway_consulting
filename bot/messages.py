@@ -85,6 +85,7 @@ Created: {created}""",
         'services': {
             'student': '🎓 Student Visa & University',
             'paye': '💰 PAYE Tax Refund',
+            'schengen': '🇪🇺 Schengen Visa',
             'self': '📊 Self Assessment Tax',
             'company': '🏢 Company Accounting',
             'general': '📋 General Inquiry'
@@ -159,6 +160,7 @@ Created: {created}""",
         'services': {
             'student': '🎓 Студенческая виза',
             'paye': '💰 Возврат PAYE',
+            'schengen': '🇪🇺 Шенген виза',
             'self': '📊 Self Assessment',
             'company': '🏢 Бухгалтерия',
             'general': '📋 Общий вопрос'
@@ -233,6 +235,7 @@ Yaratilgan: {created}""",
         'services': {
             'student': '🎓 Talaba vizasi',
             'paye': '💰 PAYE qaytarish',
+            'schengen': '🇪🇺 Shengen viza',
             'self': '📊 Self Assessment',
             'company': '🏢 Buxgalteriya',
             'general': '📋 Umumiy savol'
@@ -325,6 +328,7 @@ SERVICE_NAMES = {
     'en': {
         'student': 'Student Visa & University',
         'paye': 'PAYE Tax Refund',
+        'schengen': 'Schengen Visa',
         'self': 'Self Assessment Tax',
         'company': 'Company Accounting',
         'general': 'General Inquiry'
@@ -332,6 +336,7 @@ SERVICE_NAMES = {
     'ru': {
         'student': 'Студенческая виза',
         'paye': 'Возврат PAYE',
+        'schengen': 'Шенген виза',
         'self': 'Self Assessment',
         'company': 'Бухгалтерия',
         'general': 'Общий вопрос'
@@ -339,6 +344,7 @@ SERVICE_NAMES = {
     'uz': {
         'student': 'Talaba vizasi',
         'paye': 'PAYE qaytarish',
+        'schengen': 'Shengen viza',
         'self': 'Self Assessment',
         'company': 'Buxgalteriya',
         'general': 'Umumiy savol'

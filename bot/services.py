@@ -61,6 +61,7 @@ _service_cache = {
 SERVICE_KEYWORDS = {
     'student': ['student', 'visa', 'university', 'uni', 'talaba', 'viza', 'студент', 'виза', 'университет', 'учеба'],
     'paye': ['paye', 'employed', 'p60', 'p45', 'refund', 'hmrc', 'ish haqi', 'возврат', 'налог', 'работодатель'],
+    'schengen': ['schengen', 'shengen', 'schengen visa', 'evisa', 'sharecode', 'yashash manzili', 'шенген', 'виза шенген'],
     'self': ['self employed', 'freelance', 'utr', 'self assessment', 'mustaqil', 'самозанятый', 'фриланс'],
     'company': ['company', 'limited', 'ltd', 'accounting', 'vat', 'kompaniya', 'компания', 'бухгалтерия'],
 }
@@ -72,9 +73,13 @@ SERVICE_INFO = {
         'documents': ['Passport scan', 'University acceptance letter', 'Financial documents', 'English test results']
     },
     'paye': {
-        'collect_items': ['Full name', 'National Insurance number', 'Tax years', 'Employer details'],
-        'documents': ['P45', 'P60', 'Payslips', 'ID document'],
+        'collect_items': ['Full name', 'National Insurance number', 'Tax years', 'Employer details', 'Email and phone', 'Address outside UK (Uzb/KZ/KGZ/TJK)', 'Sort code and account number', 'How many times have you come to work (nechinchi bor kelishingiz ishga?)'],
+        'documents': ['P45 (PDF / fayli shaklida)', 'Passport (rasm / scaner qilib)', 'Address outside UK - Uzb/KZ/KGZ/TJK', 'National Insurance number', 'Email and phone', 'Card details - Sort code and account number (Angliya kartangizdan)', 'Nechinchi bor kelishingiz ishga?'],
         'strict_flow': True
+    },
+    'schengen': {
+        'collect_items': ['Full name', 'Passport number', 'Sharecode', 'Evisa', 'Yashash manzili (address)', "O'qish yoki ish joyidan malumotnoma", 'Email', 'Phone number', 'Full-time payslip if applicable', 'Last 3 months bank statement'],
+        'documents': ['Passport', 'Sharecode', 'Evisa', 'Yashash manzili', "O'qish yoki ish joyidan malumotnoma", 'Email', 'Phone number', 'Photo 3.5×4.5', 'Payslip (if full-time)', 'Bank statement – last 3 months (ohirgi 3 oylik)'],
     },
     'self': {
         'collect_items': ['Full name', 'UTR number', 'Tax year', 'Income sources', 'Expenses'],
@@ -252,7 +257,7 @@ def detect_service(text: str) -> str:
         text: User message text
         
     Returns:
-        Service slug (student, paye, self, company) or None
+        Service slug (student, paye, schengen, self, company) or None
     """
     if not text:
         return None
@@ -294,11 +299,12 @@ def ai_detect_service(text: str, conversation_history: list = None) -> str:
 Based on the user message, determine which service they need:
 - "student" - Student visa, university applications, educational guidance
 - "paye" - PAYE tax refund, employed tax returns, P45/P60
+- "schengen" - Schengen visa, Evisa, Sharecode, European/Schengen travel
 - "self" - Self-employment tax, UTR number, freelancer tax
 - "company" - Company accounting, VAT, payroll, limited company services
 - "general" - General inquiry or unclear
 
-Respond with ONLY the service slug (student, paye, self, company, or general).
+Respond with ONLY the service slug (student, paye, schengen, self, company, or general).
 """
     
     messages = [{'role': 'system', 'content': system_prompt}]
@@ -329,7 +335,7 @@ Respond with ONLY the service slug (student, paye, self, company, or general).
         result = response.choices[0].message.content.strip().lower()
         
         # Validate response
-        valid_services = ['student', 'paye', 'self', 'company', 'general']
+        valid_services = ['student', 'paye', 'schengen', 'self', 'company', 'general']
         if result in valid_services:
             logger.info(f"AI detected service: {result} for text: {text[:50]}...")
             return result if result != 'general' else None
@@ -399,7 +405,9 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
 
 {STYLE_EXAMPLES}
 
-IMPORTANT: Reply ONLY in {target_lang}. Do not switch languages unless the user explicitly asks.
+IMPORTANT – Language: If the user's last message is written mainly in Uzbek (Latin or Cyrillic), reply ONLY in Uzbek. If it is written mainly in Russian, reply ONLY in Russian. Otherwise reply in {target_lang}. Do not reply in English when the user is writing in Uzbek.
+
+Respond to the user's actual last message. If their message is normal text (e.g. a question or request in any language), answer that text. Do NOT say they sent a sticker or refer to stickers unless their message is literally "[Sticker]". Do not say "it looks like you sent a sticker" when the user sent plain text.
 
 When the user has just sent a file (photo, document, voice, video), you may suggest a short filename so we can label it. If you can infer what the file is (e.g. passport, id_front, receipt, p60), end your message with a line: FILENAME: label (e.g. FILENAME: passport or FILENAME: id_front). Use one or two words, no path and no extension. If unsure, omit this line.
 """
@@ -432,18 +440,57 @@ Guide them step by step, asking for one piece of information at a time."""
     elif service == 'paye':
         return """You are an AI assistant helping with PAYE Tax Refund claims in the UK.
 
-Follow this STRICT step-by-step flow:
+Collect the following information and request these documents (one at a time):
 
-STEP 1: Get their full name and National Insurance number
-STEP 2: Ask which tax years they want to claim (last 4 years possible)
-STEP 3: Get their employer details (name, dates worked)
-STEP 4: Request P45 or P60 documents
-STEP 5: Check if they have payslips
-STEP 6: Get their current address
-STEP 7: Confirm all details and explain next steps
+Information to collect:
+- Full name
+- National Insurance raqamingiz (National Insurance number)
+- Which tax years they want to claim (last 4 years possible)
+- Employer details (name, dates worked)
+- Email manzilingiz va telefon raqamingiz (email and phone number)
+- Angliyadan tashqaridagi manzilingiz – Uzb/KZ/KGZ/TJK (address outside UK)
+- Karta rekvizitlaringiz: Sort code va account nomer (from your UK bank card)
+- Nechinchi bor kelishingiz ishga? (How many times have you come to work?)
 
-Only move to the next step after completing the current one.
-Be clear about what documents they need to provide."""
+Documents to request:
+- P45 – PDF / fayli shaklida (in file/PDF form)
+- Pasportingiz – rasm yoki scaner qilib (passport – photo or scan)
+- Angliyadan tashqaridagi manzilingiz (Uzb/KZ/KGZ/TJK)
+- National Insurance raqamingiz
+- Email va telefon raqamingiz
+- Karta rekvizitlaringiz – Angliya kartangizdan Sort code va account nomer
+- Nechinchi bor kelishingiz ishga? (answer in text)
+
+Only move to the next step after completing the current one. When speaking to Uzbek-speaking users, use Uzbek for explanations and document names where listed above."""
+
+    elif service == 'schengen':
+        return """You are an AI assistant helping with Schengen visa applications.
+
+Collect the following information and request these documents (one at a time):
+
+Information to collect:
+- Full name (as in passport)
+- Passport number and validity
+- Sharecode
+- Evisa (if applicable)
+- Yashash manzili (residence address)
+- O'qish yoki ish joyidan malumotnoma (letter from school or employer)
+- Email and phone number
+- If working full-time: payslip
+- Last 3 months bank statement (ohirgi 3 oylik bank statement)
+
+Documents to request:
+- Passport
+- Sharecode
+- Evisa
+- Yashash manzili (proof of address)
+- O'qish yoki ish joyidan malumotnoma
+- Email and telephone number (written/confirmed)
+- Rasm 3.5×4.5 (photo 3.5×4.5 cm)
+- Full-time ishlasa: payslip
+- Bank statement – last 3 months (ohirgi 3 oylik)
+
+Guide them step by step. When the user writes in Uzbek, use Uzbek for explanations and document names where listed above."""
 
     elif service == 'self':
         return """You are an AI assistant helping with Self Assessment Tax Returns in the UK.

@@ -75,6 +75,7 @@ def dashboard(request):
     service_labels = {
         'student': 'Student Visa',
         'paye': 'PAYE Refund',
+        'schengen': 'Schengen Visa',
         'self': 'Self Assessment',
         'company': 'Company Accounting',
         'general': 'General Inquiry',
