@@ -331,7 +331,8 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
 
 IMPORTANT – Language: If the user's last message is written mainly in Uzbek (Latin or Cyrillic), reply ONLY in Uzbek. If it is written mainly in Russian, reply ONLY in Russian. Otherwise reply in {target_lang}. Do not reply in English when the user is writing in Uzbek.
 
-Respond to the user's actual last message. If their message is normal text (e.g. a question or request in any language), answer that text. Do NOT say they sent a sticker or refer to stickers unless their message is literally "[Sticker]". Do not say "it looks like you sent a sticker" when the user sent plain text.
+Respond to the user's actual last message. If their message is normal text (e.g. a question or request in any language), answer that text.
+When the user's message is exactly "[Sticker]" (they sent a sticker only): do NOT say "it seems you sent a sticker", "you sent a sticker", or similar. Instead reply briefly asking them to type what they need (e.g. Schengen visa, tax refund, accounting) so you can help. When the user sent plain text, do not refer to stickers.
 
 When the user has just sent a file (photo, document, voice, video), you may suggest a short filename so we can label it. If you can infer what the file is (e.g. passport, id_front, receipt, p60), end your message with a line: FILENAME: label (e.g. FILENAME: passport or FILENAME: id_front). Use one or two words, no path and no extension. If unsure, omit this line.
 """
@@ -524,6 +525,18 @@ def get_ai_response(message: str, conversation_history: list = None, service: st
         return None
 
 
+def _is_substantive_text(content: str) -> bool:
+    """True if content is real text we should reply to, not a sticker or file placeholder."""
+    if not content or not content.strip():
+        return False
+    c = content.strip()
+    if c == '[Sticker]':
+        return False
+    if c.startswith('[FILE:'):
+        return False
+    return True
+
+
 def ask_ai(conversation: list, service: str, lang: str = 'en', max_tokens: int = 800) -> str:
     """
     Call OpenAI API to get AI response.
@@ -538,13 +551,21 @@ def ask_ai(conversation: list, service: str, lang: str = 'en', max_tokens: int =
     Returns:
         AI response text or None on error
     """
-    # Get the last user message
+    # Last user message
     last_message = None
     for msg in reversed(conversation):
         if msg.get('role') == 'user':
             last_message = msg.get('content', '')
             break
-    
+
+    # If the last message is only [Sticker], prefer the most recent substantive text from the user
+    # (e.g. user sent "Shengen visa keragidi" and a sticker in the same minute; we reply to the text)
+    if last_message and last_message.strip() == '[Sticker]':
+        for msg in reversed(conversation[:-1]):  # exclude the [Sticker] message
+            if msg.get('role') == 'user' and _is_substantive_text(msg.get('content', '')):
+                last_message = msg.get('content', '')
+                break
+
     return get_ai_response(
         message=last_message or '',
         conversation_history=conversation[:-1] if conversation else None,
