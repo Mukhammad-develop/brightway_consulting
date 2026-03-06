@@ -576,6 +576,38 @@ def handle_text_message(message):
         bot.reply_to(message, "Sorry, an error occurred. Please try again.")
 
 
+@bot.message_handler(content_types=['sticker'])
+def handle_sticker(message):
+    """Handle stickers: first message gets opening only; later messages get AI reply."""
+    try:
+        user = get_or_create_user(message.from_user)
+        if not user:
+            bot.reply_to(message, "Sorry, an error occurred.")
+            return
+        lang = get_user_language(user)
+        case = get_or_open_case(user, 'general')
+        conv = case.get_conversation()
+        if len(conv) == 0:
+            from bot.messages import OPENING_MESSAGE
+            case.add_message('assistant', OPENING_MESSAGE)
+            bot.send_message(message.chat.id, OPENING_MESSAGE)
+            case.add_message('user', '[Sticker]')
+            logger.info(f"First message from {user.telegram_id} was sticker: sent opening only")
+            return
+        # Not first message: add sticker to conversation and get AI response
+        stop_typing = threading.Event()
+        typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
+        typing_thread.start()
+        try:
+            response, _ = process_ai_response(user, case, '[Sticker]', lang)
+        finally:
+            stop_typing.set()
+        if response:
+            bot.send_message(message.chat.id, response)
+    except Exception as e:
+        logger.error(f"Error handling sticker: {e}")
+
+
 @bot.message_handler(content_types=['voice', 'audio'])
 def handle_voice_message(message):
     """Handle voice/audio messages with transcription."""
@@ -589,6 +621,14 @@ def handle_voice_message(message):
         
         lang = get_user_language(user)
         case = get_or_open_case(user, 'general')
+        conv = case.get_conversation()
+        if len(conv) == 0:
+            from bot.messages import OPENING_MESSAGE
+            case.add_message('assistant', OPENING_MESSAGE)
+            bot.send_message(message.chat.id, OPENING_MESSAGE)
+            case.add_message('user', '[Voice]')
+            logger.info(f"First message from {user.telegram_id} was voice: sent opening only")
+            return
         
         # Get file info
         if message.voice:
@@ -698,12 +738,17 @@ def handle_document(message):
             return
         
         lang = get_user_language(user)
-        
-        # Get current service from state
         state = get_conversation_state(message.from_user.id)
         current_service = state.get('service', 'general')
-        
         case = get_or_open_case(user, current_service)
+        conv = case.get_conversation()
+        if len(conv) == 0:
+            from bot.messages import OPENING_MESSAGE
+            case.add_message('assistant', OPENING_MESSAGE)
+            bot.send_message(message.chat.id, OPENING_MESSAGE)
+            case.add_message('user', '[Media]')
+            logger.info(f"First message from {user.telegram_id} was document: sent opening only")
+            return
         
         # Get file info
         doc = message.document
@@ -798,12 +843,17 @@ def handle_photo(message):
             return
         
         lang = get_user_language(user)
-        
-        # Get current service from state
         state = get_conversation_state(message.from_user.id)
         current_service = state.get('service', 'general')
-        
         case = get_or_open_case(user, current_service)
+        conv = case.get_conversation()
+        if len(conv) == 0:
+            from bot.messages import OPENING_MESSAGE
+            case.add_message('assistant', OPENING_MESSAGE)
+            bot.send_message(message.chat.id, OPENING_MESSAGE)
+            case.add_message('user', '[Photo]')
+            logger.info(f"First message from {user.telegram_id} was photo: sent opening only")
+            return
         
         # Get largest photo
         photo = message.photo[-1]

@@ -29,7 +29,10 @@ django.setup()
 from django.conf import settings
 from telethon import TelegramClient, events, Button
 from telethon.tl import functions
-from telethon.tl.types import Message, MessageMediaPhoto, MessageMediaDocument, SendMessageTypingAction
+from telethon.tl.types import (
+    Message, MessageMediaPhoto, MessageMediaDocument, SendMessageTypingAction,
+    DocumentAttributeSticker,
+)
 
 from .messages import t, get_all_languages, LANG_CALLBACKS
 from .services import (
@@ -131,6 +134,26 @@ def _get_or_open_case(user, service='general'):
         )
     
     return case
+
+
+def _first_media_label(media) -> str:
+    """Return a short label for the first message when it's media (sticker, photo, etc.)."""
+    if media is None:
+        return "[Media]"
+    if isinstance(media, MessageMediaPhoto):
+        return "[Photo]"
+    if isinstance(media, MessageMediaDocument):
+        doc = media.document
+        attrs = getattr(doc, 'attributes', []) or []
+        if any(isinstance(a, DocumentAttributeSticker) for a in attrs):
+            return "[Sticker]"
+        mime = (doc.mime_type or '').lower()
+        if mime.startswith('audio/') or any(getattr(a, 'voice', False) for a in attrs):
+            return "[Voice]"
+        if mime.startswith('video/'):
+            return "[Video]"
+        return "[Media]"
+    return "[Media]"
 
 
 def _telegram_message_role(msg) -> str:
@@ -486,12 +509,34 @@ def register_handlers(client: TelegramClient, account_index: int):
     
     @client.on(events.NewMessage(incoming=True, func=lambda e: e.media))
     async def handle_media(event):
-        """Handle media messages (photos, documents, voice)."""
-        if not event.is_private or event.text.startswith('/'):
+        """Handle media messages (photos, documents, voice, stickers)."""
+        if not event.is_private or (event.text and event.text.startswith('/')):
             return
         
         try:
             sender = await event.get_sender()
+            
+            # If new user, check for prior chat (same as text handler) so we don't send opening over imported history
+            user_exists = await run_sync(lambda: __user_exists_by_telegram_id(sender.id))
+            if not user_exists:
+                try:
+                    hist = await client.get_messages(sender.id, limit=1)
+                    if hist and len(hist) > 0:
+                        count, err = await fetch_and_save_chat(client, str(sender.id), limit=3000, import_req_id=None)
+                        if not err:
+                            await run_sync(lambda: _set_linked_account(sender.id, account_index))
+                            label = _first_media_label(event.media)
+                            def add_first_media():
+                                from core.models import TgUser, Case
+                                u = TgUser.objects.get(telegram_id=sender.id)
+                                c = Case.objects.filter(user=u, status='active').order_by('-updated_at').first()
+                                if c:
+                                    c.add_message('user', label)
+                            await run_sync(add_first_media)
+                            logger.info(f"[Account {account_index}] New contact {sender.id} sent media first; imported {count} messages")
+                        return
+                except Exception as e:
+                    logger.debug(f"History check for {sender.id}: {e}")
             
             user, _ = await run_sync(lambda: _get_or_create_user(
                 sender.id, sender.first_name, sender.username
@@ -499,7 +544,18 @@ def register_handlers(client: TelegramClient, account_index: int):
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
             
             lang = user.language_code if user else 'en'
-            case = await run_sync(lambda: _get_or_open_case(user))
+            case = await run_sync(lambda: _get_or_open_case(user, 'general'))
+            conv = await run_sync(lambda: case.get_conversation())
+            
+            # First message (any media): send opening only, no AI, no download
+            if len(conv) == 0:
+                from bot.messages import OPENING_MESSAGE
+                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', OPENING_MESSAGE))
+                await event.respond(OPENING_MESSAGE)
+                label = _first_media_label(event.media)
+                await run_sync(lambda: _add_message_to_case(case.pk, 'user', label))
+                logger.info(f"[Account {account_index}] First message from {sender.id} was media ({label}): sent opening only")
+                return
             
             # Download media
             unique_id = str(uuid4())[:8]
