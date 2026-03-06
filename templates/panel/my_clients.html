@@ -1,0 +1,55 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}My Clients{% endblock %}
+{% block page_title_header %}My Clients{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:dashboard' %}" class="btn btn-text">← Dashboard</a>
+{% endblock %}
+
+{% block content %}
+<div class="list-page">
+    <p class="results-info">Clients assigned to you. Open a client to view their profile and send messages on Telegram.</p>
+    
+    <div class="panel-card">
+        <div class="card-body no-padding">
+            {% if client_list %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Client</th>
+                        <th>Telegram</th>
+                        <th>Last activity</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in client_list %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.user.first_name|default:"" }} {{ item.user.last_name|default:"" }}</strong>
+                            {% if not item.user.first_name and not item.user.last_name %}User {{ item.user.telegram_id }}{% endif %}
+                        </td>
+                        <td>
+                            {% if item.user.username %}@{{ item.user.username }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if item.last_updated %}{{ item.last_updated|date:"M d, Y H:i" }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'panel:user_detail' item.user.pk %}" class="btn btn-primary btn-sm">Open & message</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No clients assigned to you yet.</p>
+                <p class="text-muted">When the AI finishes collecting information from a user, they will be assigned to a consultant and appear here.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

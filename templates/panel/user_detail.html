@@ -1,0 +1,480 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}{% if user_obj.first_name or user_obj.last_name %}{{ user_obj.first_name }} {{ user_obj.last_name }}{% elif user_obj.username %}@{{ user_obj.username }}{% else %}ID: {{ user_obj.telegram_id }}{% endif %}{% endblock %}
+{% block page_title_header %}User Profile{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:user_edit' user_obj.pk %}" class="btn btn-outline">Edit User</a>
+<a href="{% url 'panel:users_list' %}" class="btn btn-text">← Back to Users</a>
+{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="detail-grid">
+        <!-- User Profile Card -->
+        <div class="panel-card profile-card">
+            <div class="card-body">
+                <div class="profile-header">
+                    <div class="profile-avatar">
+                        {% if user_obj.profile_photo_path %}
+                        <img src="/uploads/{{ user_obj.profile_photo_path }}" alt="" class="profile-avatar-img">
+                        {% else %}
+                        <span class="profile-avatar-letter">{% if user_obj.first_name %}{{ user_obj.first_name|slice:":1"|upper }}{% elif user_obj.username %}{{ user_obj.username|slice:":1"|upper }}{% else %}ID{% endif %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="profile-info">
+                        <h2>{% if user_obj.first_name or user_obj.last_name %}{{ user_obj.first_name|default:"" }} {{ user_obj.last_name|default:"" }}{% elif user_obj.username %}@{{ user_obj.username }}{% else %}ID: {{ user_obj.telegram_id }}{% endif %}</h2>
+                        <p class="profile-meta">
+                            {% if user_obj.username %}@{{ user_obj.username }} · {% endif %}
+                            Telegram ID: {{ user_obj.telegram_id }}
+                        </p>
+                        {% if user_obj.bio %}
+                        <p class="profile-bio">{{ user_obj.bio }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if ai_profile and ai_profile.get_pinned %}
+                <div class="profile-pinned">
+                    <h4 class="pinned-heading">📌 Pinned</h4>
+                    <div class="pinned-items">
+                        {% for item in ai_profile.get_pinned %}
+                        <div class="pinned-item">
+                            <span class="pinned-label">{{ item.label }}</span>
+                            <span class="pinned-value">{{ item.value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="profile-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Phone</span>
+                        <span class="detail-value">{{ user_obj.phone|default:"-" }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Language</span>
+                        <span class="detail-value">
+                            {% if user_obj.language_code == 'en' %}🇬🇧 English{% elif user_obj.language_code == 'ru' %}🇷🇺 Russian{% elif user_obj.language_code == 'uz' %}🇺🇿 Uzbek{% else %}{{ user_obj.language_code|upper }}{% endif %}
+                        </span>
+                    </div>
+                    {% if ai_data.gender %}
+                    <div class="detail-row">
+                        <span class="detail-label">Gender</span>
+                        <span class="detail-value">{{ ai_data.gender }}</span>
+                    </div>
+                    {% endif %}
+                    {% if ai_data.age %}
+                    <div class="detail-row">
+                        <span class="detail-label">Age</span>
+                        <span class="detail-value">{{ ai_data.age }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="detail-row">
+                        <span class="detail-label">Joined</span>
+                        <span class="detail-value">{{ user_obj.created_at|date:"F d, Y H:i" }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Total Cases</span>
+                        <span class="detail-value">{{ cases|length }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Total Documents</span>
+                        <span class="detail-value">{{ documents|length }}</span>
+                    </div>
+                </div>
+                
+                {% if ai_data %}
+                <div class="ai-profile-section">
+                    <h4>AI Extracted Profile</h4>
+                    <div class="ai-profile-data">
+                        {% for key, value in ai_data.items %}
+                        {% if value and key != "gender" and key != "age" %}
+                        <div class="detail-row">
+                            <span class="detail-label">{{ key|title }}</span>
+                            <span class="detail-value">{{ value }}</span>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <p class="ai-timestamp">Last updated: {{ ai_profile.updated_at|date:"M d, Y H:i" }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Conversation, Cases & Documents -->
+        <div class="detail-main">
+            <!-- Conversation & Reply (Telegram) -->
+            <div class="panel-card chat-panel">
+                <div class="card-header">
+                    <h3>Conversation</h3>
+                    {% if active_case %}
+                    <span class="badge badge-{{ active_case.service }}">Case #{{ active_case.pk }}</span>
+                    <span class="chat-ai-toggle" id="chatAiToggle">
+                        <span class="ai-status" id="aiStatus">AI: {{ active_case.ai_enabled|yesno:"On,Off" }}</span>
+                        <button type="button" class="btn btn-sm btn-outline" id="aiToggleBtn" data-case-id="{{ active_case.pk }}" data-toggle-url="{% url 'panel:case_toggle_ai' active_case.pk %}" title="Turn AI responses on or off for this chat">Toggle AI</button>
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="card-body chat-wrap">
+                    {% if conversation %}
+                    <div class="chat-messages" id="chatMessages">
+                        {% for msg in conversation %}
+                        <div class="chat-msg {{ msg.role }}" data-timestamp="{{ msg.timestamp|default:'' }}">
+                            {% if msg.file_info %}
+                            <div class="msg-bubble msg-file-bubble">
+                                <div class="chat-file-card">
+                                    <span class="chat-file-icon">{% if msg.file_media_type == 'photo' %}🖼️{% elif msg.file_media_type == 'voice' %}🎤{% elif msg.file_media_type == 'video' %}🎬{% else %}📄{% endif %}</span>
+                                    <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
+                                    <div class="chat-file-actions">
+                                        {% if msg.file_media_type == 'photo' or msg.file_media_type == 'voice' or msg.file_media_type == 'video' %}
+                                        <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">View</a>
+                                        {% endif %}
+                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="msg-bubble">{% if msg.content %}{{ msg.content }}{% else %}<em>—</em>{% endif %}</div>
+                            {% endif %}
+                            <div class="msg-meta">{{ msg.role|title }}{% if msg.sender %} · {{ msg.sender }}{% endif %}{% if msg.timestamp %} · {{ msg.timestamp|slice:":16" }}{% endif %}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state" id="chatEmpty">
+                        <p>No messages yet. Send a message below to start the conversation on Telegram.</p>
+                    </div>
+                    {% endif %}
+                    <form class="chat-send" id="chatSendForm" onsubmit="return false;">
+                        {% csrf_token %}
+                        <textarea id="chatInput" class="form-input" rows="2" placeholder="Type a message to send via Telegram..."></textarea>
+                        <button type="button" class="btn btn-primary" id="chatSendBtn">Send</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- User Cases -->
+            <div class="panel-card">
+                <div class="card-header">
+                    <h3>Cases ({{ cases|length }})</h3>
+                    <a href="{% url 'panel:case_add' %}?user_id={{ user_obj.pk }}" class="btn btn-sm btn-outline">+ New Case</a>
+                </div>
+                <div class="card-body">
+                    {% if cases %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Service</th>
+                                <th>Status</th>
+                                <th>Payment</th>
+                                <th>Created</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for case in cases %}
+                            <tr>
+                                <td>{{ case.pk }}</td>
+                                <td><span class="badge badge-{{ case.service }}">{{ case.get_service_display }}</span></td>
+                                <td><span class="status-badge status-{{ case.status }}">{{ case.get_status_display }}</span></td>
+                                <td><span class="status-badge payment-{{ case.payment_status }}">{{ case.get_payment_status_display }}</span></td>
+                                <td>{{ case.created_at|date:"M d, Y" }}</td>
+                                <td><a href="{% url 'panel:case_detail' case.pk %}" class="btn btn-xs">View</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">
+                        <p>No cases yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- User Documents -->
+            <div class="panel-card">
+                <div class="card-header">
+                    <h3>Documents ({{ documents|length }})</h3>
+                </div>
+                <div class="card-body">
+                    {% if documents %}
+                    <div class="files-grid">
+                        {% for doc in documents %}
+                        <div class="file-card">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">{{ doc.display_name|default:doc.file_path|default:"Document" }}</div>
+                                <div class="file-meta">{{ doc.file_type|default:"unknown" }} · {{ doc.uploaded_at|date:"M d" }}</div>
+                            </div>
+                            <a href="{% url 'panel:file_detail' doc.pk %}" class="btn btn-xs">Details</a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <p>No documents uploaded</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Client Notes -->
+            <div class="panel-card" id="notes-section">
+                <div class="card-header">
+                    <h3>Notes ({{ notes|length }})</h3>
+                </div>
+                <div class="card-body">
+                    <!-- Add Note Form -->
+                    <form method="post" action="{% url 'panel:note_add' user_id=user_obj.pk %}" class="add-note-form">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <textarea name="note_text" class="form-textarea" rows="3" placeholder="Write a note about this client..." required></textarea>
+                        </div>
+                        <div class="note-form-actions">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="is_pinned">
+                                <span>📌 Pin this note</span>
+                            </label>
+                            <button type="submit" class="btn btn-primary btn-sm">Add Note</button>
+                        </div>
+                    </form>
+                    
+                    <!-- Notes List -->
+                    {% if notes %}
+                    <div class="notes-list">
+                        {% for note in notes %}
+                        <div class="note-card {% if note.is_pinned %}pinned{% endif %}" id="note-{{ note.pk }}">
+                            <div class="note-header">
+                                <span class="note-author">{{ note.author_name }}</span>
+                                {% if note.is_pinned %}<span class="pin-icon">📌</span>{% endif %}
+                                <span class="note-time">{{ note.created_at|timesince }} ago</span>
+                            </div>
+                            <div class="note-content">
+                                {{ note.note_text|linebreaks }}
+                            </div>
+                            <div class="note-actions">
+                                {% if note.admin_user.pk == current_admin_id or is_master or is_elevated %}
+                                <form method="post" action="{% url 'panel:note_toggle_pin' user_id=user_obj.pk note_id=note.pk %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-xs btn-outline">{% if note.is_pinned %}Unpin{% else %}Pin{% endif %}</button>
+                                </form>
+                                <button type="button" class="btn btn-xs btn-outline" onclick="toggleEditNote({{ note.pk }})">Edit</button>
+                                <form method="post" action="{% url 'panel:note_delete' user_id=user_obj.pk note_id=note.pk %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-xs btn-danger" onclick="return confirm('Delete this note?')">Delete</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Edit Form (hidden by default) -->
+                            <form method="post" action="{% url 'panel:note_edit' user_id=user_obj.pk note_id=note.pk %}" class="edit-note-form" id="edit-form-{{ note.pk }}" style="display:none;">
+                                {% csrf_token %}
+                                <textarea name="note_text" class="form-textarea" rows="3">{{ note.note_text }}</textarea>
+                                <div class="edit-form-actions">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" name="is_pinned" {% if note.is_pinned %}checked{% endif %}>
+                                        <span>Pin</span>
+                                    </label>
+                                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                                    <button type="button" class="btn btn-sm btn-outline" onclick="toggleEditNote({{ note.pk }})">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state notes-empty">
+                        <p>No notes yet. Add the first note about this client.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.add-note-form { margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
+.note-form-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 0.75rem; }
+.notes-list { display: flex; flex-direction: column; gap: 1rem; }
+.note-card { background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; }
+.note-card.pinned { border-left: 3px solid var(--primary-color); }
+.note-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.note-author { font-weight: 600; font-size: 0.9rem; }
+.pin-icon { font-size: 0.9rem; }
+.note-time { margin-left: auto; font-size: 0.8rem; color: var(--text-muted); }
+.note-content { margin-bottom: 0.75rem; line-height: 1.5; }
+.note-content p { margin: 0; }
+.note-actions { display: flex; gap: 0.5rem; }
+.edit-note-form { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+.edit-form-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; }
+.notes-empty { margin-top: 1rem; }
+.chat-ai-toggle { display: inline-flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+.chat-ai-toggle .ai-status { font-size: 0.85rem; color: var(--text-secondary); }
+.chat-panel .chat-wrap { display: flex; flex-direction: column; gap: 1rem; }
+.chat-messages { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
+.chat-msg { display: flex; flex-direction: column; align-items: flex-start; }
+.chat-msg.assistant, .chat-msg.admin { align-items: flex-end; }
+.chat-msg .msg-bubble { max-width: 85%; padding: 0.5rem 0.75rem; border-radius: 12px; background: var(--bg-tertiary); }
+.chat-msg.user .msg-bubble { background: var(--accent-primary); color: #fff; }
+.chat-msg .msg-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+.chat-send { display: flex; gap: 0.5rem; align-items: flex-end; }
+.chat-send textarea { flex: 1; resize: vertical; min-height: 44px; }
+.msg-file-bubble { padding: 0.5rem 0.75rem; }
+.chat-file-card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.chat-file-icon { font-size: 1.25rem; }
+.chat-file-name { font-size: 0.9rem; word-break: break-all; }
+.chat-file-actions { display: flex; gap: 0.35rem; margin-left: auto; }
+.detail-main .panel-card { margin-bottom: 1.5rem; }
+.detail-main .panel-card:last-child { margin-bottom: 0; }
+</style>
+
+<script>
+(function() {
+    const sendUrl = "{% url 'panel:send_message' user_id=user_obj.pk %}";
+    const pollUrl = "{% url 'panel:poll_messages' user_id=user_obj.pk %}";
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+    function scrollChatToBottom() {
+        const wrap = document.getElementById('chatMessages');
+        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    function getChatContainer() {
+        let wrap = document.getElementById('chatMessages');
+        if (wrap) return wrap;
+        const empty = document.getElementById('chatEmpty');
+        if (empty) {
+            empty.remove();
+            wrap = document.createElement('div');
+            wrap.className = 'chat-messages';
+            wrap.id = 'chatMessages';
+            empty.parentElement.insertBefore(wrap, document.getElementById('chatSendForm'));
+        }
+        return wrap;
+    }
+
+    function getLastTimestamp() {
+        const messages = document.querySelectorAll('#chatMessages .chat-msg[data-timestamp]');
+        if (!messages.length) return '';
+        return messages[messages.length - 1].getAttribute('data-timestamp') || '';
+    }
+
+    function appendMessage(role, content, sender, timestamp, fileDoc) {
+        const wrap = getChatContainer();
+        if (!wrap) return;
+        const ts = (timestamp || '').slice(0, 16);
+        const roleLabel = role === 'user' ? 'User' : (role === 'assistant' ? 'Assistant' : 'Admin');
+        let bubbleHtml;
+        if (fileDoc && fileDoc.id) {
+            const mt = fileDoc.media_type || '';
+            const icon = (mt === 'photo') ? '🖼️' : (mt === 'voice') ? '🎤' : (mt === 'video') ? '🎬' : '📄';
+            const fn = (fileDoc.filename || 'File').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const viewUrl = '/admin/files/' + fileDoc.id + '/view';
+            const downloadUrl = viewUrl + '?download=1';
+            const viewable = (mt === 'photo' || mt === 'voice' || mt === 'video');
+            let actions = viewable ? '<a href="' + viewUrl + '" target="_blank" rel="noopener" class="btn btn-xs btn-outline">View</a> ' : '';
+            actions += '<a href="' + downloadUrl + '" class="btn btn-xs btn-outline">Download</a>';
+            bubbleHtml = '<div class="msg-bubble msg-file-bubble"><div class="chat-file-card">' +
+                '<span class="chat-file-icon">' + icon + '</span><span class="chat-file-name">' + fn + '</span>' +
+                '<div class="chat-file-actions">' + actions + '</div></div></div>';
+        } else {
+            const text = (content || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            bubbleHtml = '<div class="msg-bubble">' + text + '</div>';
+        }
+        const div = document.createElement('div');
+        div.className = 'chat-msg ' + role;
+        div.setAttribute('data-timestamp', timestamp || '');
+        div.innerHTML = bubbleHtml + '<div class="msg-meta">' + roleLabel + (sender ? ' · ' + sender : '') + (ts ? ' · ' + ts : '') + '</div>';
+        wrap.appendChild(div);
+        wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    // On load: show latest messages (scroll chat to bottom)
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scrollChatToBottom);
+    } else {
+        scrollChatToBottom();
+    }
+
+    document.getElementById('aiToggleBtn')?.addEventListener('click', function() {
+        const btn = this;
+        const url = btn.getAttribute('data-toggle-url');
+        if (!url) return;
+        btn.disabled = true;
+        fetch(url, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+            body: '{}'
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.ok) {
+                var statusEl = document.getElementById('aiStatus');
+                if (statusEl) statusEl.textContent = data.ai_enabled ? 'AI: On' : 'AI: Off';
+            } else alert(data.error || 'Failed to toggle');
+        }).catch(function() { alert('Request failed'); }).finally(function() { btn.disabled = false; });
+    });
+
+    document.getElementById('chatSendBtn')?.addEventListener('click', function() {
+        const input = document.getElementById('chatInput');
+        const text = (input?.value || '').trim();
+        if (!text) return;
+        this.disabled = true;
+        fetch(sendUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ text: text })
+        }).then(r => r.json()).then(function(data) {
+            if (data.ok) {
+                input.value = '';
+                const sender = data.sender || 'Admin';
+                const ts = data.timestamp || new Date().toISOString();
+                appendMessage('admin', text, sender, ts);
+            } else alert(data.error || 'Failed to send');
+        }).finally(function() { this.disabled = false; }.bind(this));
+    });
+
+    setInterval(function() {
+        const since = getLastTimestamp();
+        const url = since ? pollUrl + '?since=' + encodeURIComponent(since) : pollUrl;
+        fetch(url).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.messages && d.messages.length) {
+                const fileDocs = d.file_docs || {};
+                d.messages.forEach(function(m) {
+                    let fileDoc = null;
+                    var c = (m.content || '').trim();
+                    if (c.indexOf('[FILE:') === 0 && c.slice(-1) === ']') {
+                        var parts = c.slice(6, -1).split(':');
+                        if (parts.length >= 3) fileDoc = fileDocs[parts[0]];
+                    }
+                    appendMessage(m.role || 'user', m.content, m.sender, m.timestamp, fileDoc);
+                });
+            }
+        }).catch(function() {});
+    }, 5000);
+})();
+</script>
+
+<script>
+function toggleEditNote(noteId) {
+    const noteCard = document.getElementById('note-' + noteId);
+    const editForm = document.getElementById('edit-form-' + noteId);
+    const noteContent = noteCard.querySelector('.note-content');
+    const noteActions = noteCard.querySelector('.note-actions');
+    
+    if (editForm.style.display === 'none') {
+        editForm.style.display = 'block';
+        noteContent.style.display = 'none';
+        noteActions.style.display = 'none';
+    } else {
+        editForm.style.display = 'none';
+        noteContent.style.display = 'block';
+        noteActions.style.display = 'flex';
+    }
+}
+</script>
+{% endblock %}

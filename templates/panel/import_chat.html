@@ -1,0 +1,274 @@
+{% extends "panel/base.html" %}
+{% load static %}
+
+{% block page_title %}Import Chat History{% endblock %}
+
+{% block topbar_actions %}
+<button onclick="document.getElementById('importModal').classList.add('show')" class="btn btn-primary">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12l7-7 7 7"/>
+    </svg>
+    Queue Import
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="import-chat-page">
+    
+    <!-- Info Card -->
+    <div class="panel-card mb-3">
+        <div class="card-header">
+            <h3>📥 Chat Import</h3>
+        </div>
+        <div class="card-body">
+            <p>Import chat history from Telegram conversations using the userbot.</p>
+            <ul class="info-list">
+                <li>The userbot must be running (<code>python manage.py run_userbot</code>)</li>
+                <li>Enter the Telegram ID or username of the user</li>
+                <li>Messages will be imported into a new case</li>
+                <li>Only text messages are imported (media shows as placeholder)</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Import History -->
+    <div class="panel-card">
+        <div class="card-header">
+            <h3>Import History</h3>
+        </div>
+        <div class="card-body">
+            {% if page_obj.object_list %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Telegram ID</th>
+                        <th>Label</th>
+                        <th>Status</th>
+                        <th>Messages</th>
+                        <th>Queued</th>
+                        <th>Completed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for imp in page_obj %}
+                    <tr class="import-row {% if imp.status in 'pending,processing' %}import-pending{% endif %}" data-id="{{ imp.pk }}">
+                        <td>{{ imp.pk }}</td>
+                        <td><code>{{ imp.user_tg_id }}</code></td>
+                        <td>{{ imp.label|default:"-" }}</td>
+                        <td>
+                            <span class="status-badge status-{{ imp.status }}" title="{{ imp.error_msg|default:'' }}">
+                                {{ imp.status }}
+                            </span>
+                        </td>
+                        <td class="msg-count">{{ imp.message_count }}</td>
+                        <td>{{ imp.created_at|date:"M d, Y H:i" }}</td>
+                        <td>{{ imp.completed_at|date:"M d, Y H:i"|default:"-" }}</td>
+                        <td>
+                            {% if imp.status == 'pending' %}
+                            <form action="{% url 'panel:import_cancel' imp.pk %}" method="post" style="display:inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-secondary" onclick="return confirm('Cancel this import?')">Cancel</button>
+                            </form>
+                            {% elif imp.status in 'done,error' %}
+                            <form action="{% url 'panel:import_delete' imp.pk %}" method="post" style="display:inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this record?')">Delete</button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted">Processing...</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            {% if page_obj.has_other_pages %}
+            <div class="pagination">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-secondary">← Previous</a>
+                {% endif %}
+                <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="btn btn-secondary">Next →</a>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <div class="empty-state">
+                <p>No import history yet.</p>
+                <p class="text-muted">Queue an import to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Queue Chat Import</h3>
+            <button type="button" class="modal-close" onclick="document.getElementById('importModal').classList.remove('show')">&times;</button>
+        </div>
+        <form action="{% url 'panel:import_chat' %}" method="post">
+            {% csrf_token %}
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="tg_id">Telegram ID or Username *</label>
+                    <input type="text" id="tg_id" name="tg_id" class="form-input" placeholder="e.g., 123456789 or @username" required>
+                    <small class="form-help">Enter the numeric Telegram ID or username (with @)</small>
+                </div>
+                <div class="form-group">
+                    <label for="label">Label (optional)</label>
+                    <input type="text" id="label" name="label" class="form-input" placeholder="e.g., John Doe - Visa Inquiry">
+                    <small class="form-help">A descriptive label for this import</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('importModal').classList.remove('show')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Queue Import</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.info-list {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+.info-list li {
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+.info-list code {
+    background: var(--bg-tertiary);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.import-row.import-pending {
+    background: rgba(255, 193, 7, 0.1);
+}
+
+.status-badge.status-pending { background: var(--warning-bg); color: var(--warning-text); }
+.status-badge.status-processing { background: var(--primary-bg); color: var(--primary); animation: pulse 1.5s infinite; }
+.status-badge.status-done { background: var(--success-bg); color: var(--success); }
+.status-badge.status-error { background: var(--danger-bg); color: var(--danger); }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Modal */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay.show {
+    display: flex;
+}
+.modal-content {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.modal-header h3 {
+    margin: 0;
+}
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.modal-body {
+    padding: 1.5rem;
+}
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+.form-help {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--text-tertiary);
+    font-size: 0.85rem;
+}
+</style>
+
+<script>
+// Poll for pending imports
+const pendingIds = {{ pending_ids|safe }};
+
+function pollImportStatus() {
+    pendingIds.forEach(function(id) {
+        fetch('{% url "panel:import_status" 0 %}'.replace('0', id))
+            .then(r => r.json())
+            .then(data => {
+                const row = document.querySelector('.import-row[data-id="' + id + '"]');
+                if (row) {
+                    // Update status badge
+                    const badge = row.querySelector('.status-badge');
+                    badge.className = 'status-badge status-' + data.status;
+                    badge.textContent = data.status;
+                    
+                    // Update message count
+                    const msgCount = row.querySelector('.msg-count');
+                    if (msgCount) msgCount.textContent = data.message_count;
+                    
+                    // Remove from polling if done
+                    if (data.status === 'done' || data.status === 'error') {
+                        const idx = pendingIds.indexOf(id);
+                        if (idx > -1) pendingIds.splice(idx, 1);
+                        
+                        // Refresh page to show updated actions
+                        if (pendingIds.length === 0) {
+                            setTimeout(() => location.reload(), 1000);
+                        }
+                    }
+                }
+            })
+            .catch(console.error);
+    });
+}
+
+if (pendingIds.length > 0) {
+    setInterval(pollImportStatus, 4000);
+}
+
+// Close modal on outside click
+document.getElementById('importModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        this.classList.remove('show');
+    }
+});
+</script>
+{% endblock %}

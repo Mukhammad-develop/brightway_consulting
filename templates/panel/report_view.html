@@ -1,0 +1,120 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:reports' %}" class="btn btn-outline">← Back to Reports</a>
+{% endblock %}
+
+{% block content %}
+<div class="report-view">
+    <div class="report-header">
+        <div class="report-meta">
+            <span class="badge badge-{{ report.report_type }}">{{ report.get_report_type_display }}</span>
+            <span class="report-period">{{ report.period_start }} to {{ report.period_end }}</span>
+            <span class="report-date">Generated: {{ report.created_at|date:"M d, Y H:i" }}</span>
+        </div>
+    </div>
+    
+    <div class="report-grid">
+        <!-- AI Conclusion -->
+        <div class="panel-card report-conclusion">
+            <div class="card-header">AI Business Conclusion</div>
+            <div class="card-body">
+                {% if report.ai_conclusion %}
+                <div class="conclusion-content">{{ report.ai_conclusion|linebreaks }}</div>
+                {% else %}
+                <div class="empty-state">No AI conclusion available for this report.</div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="panel-card report-stats">
+            <div class="card-header">Period Statistics</div>
+            <div class="card-body">
+                <div class="stat-row">
+                    <span class="stat-label">New Users</span>
+                    <span class="stat-value">{{ stats.new_users|default:0 }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">New Cases</span>
+                    <span class="stat-value">{{ stats.new_cases|default:0 }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Completed Cases</span>
+                    <span class="stat-value">{{ stats.completed_cases|default:0 }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Paid Cases</span>
+                    <span class="stat-value">{{ stats.paid_cases|default:0 }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Active Cases</span>
+                    <span class="stat-value">{{ stats.active_cases|default:0 }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Documents Uploaded</span>
+                    <span class="stat-value">{{ stats.docs_uploaded|default:0 }}</span>
+                </div>
+                <div class="stat-row highlight">
+                    <span class="stat-label">Total Revenue</span>
+                    <span class="stat-value">£{{ stats.total_revenue|default:0|floatformat:2 }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cases by Service Chart -->
+        <div class="panel-card report-chart">
+            <div class="card-header">Cases by Service</div>
+            <div class="card-body">
+                {% if service_data %}
+                <div class="chart-bars">
+                    {% for item in service_data %}
+                    <div class="bar-row">
+                        <span class="bar-label">{{ item.service }}</span>
+                        <div class="bar-track">
+                            <div class="bar-fill fill-{{ item.service }}" style="width: {{ item.pct }}%;"></div>
+                        </div>
+                        <span class="bar-value">{{ item.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">No case data for this period.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.report-view { }
+.report-header { margin-bottom: 1.5rem; }
+.report-meta { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.report-period { font-size: 1.1rem; font-weight: 500; }
+.report-date { font-size: 0.9rem; color: var(--text-secondary); }
+.report-grid { display: grid; grid-template-columns: 1fr 340px; gap: 1.5rem; }
+.report-conclusion { grid-column: 1; }
+.report-stats { grid-column: 2; grid-row: 1 / 3; }
+.report-chart { grid-column: 1; }
+.conclusion-content { line-height: 1.7; }
+.stat-row { display: flex; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--border-color); }
+.stat-row:last-child { border-bottom: none; }
+.stat-row.highlight { background: var(--bg-tertiary); margin: 0.5rem -1rem -1rem -1rem; padding: 1rem; border-radius: 0 0 8px 8px; }
+.stat-row .stat-label { color: var(--text-secondary); }
+.stat-row .stat-value { font-weight: 600; }
+.chart-bars { display: flex; flex-direction: column; gap: 0.75rem; }
+.bar-row { display: flex; align-items: center; gap: 1rem; }
+.bar-label { width: 100px; font-size: 0.85rem; }
+.bar-track { flex: 1; height: 20px; background: var(--bg-tertiary); border-radius: 10px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 10px; transition: width 0.5s ease; }
+.fill-student { background: #3b82f6; }
+.fill-paye { background: #10b981; }
+.fill-self { background: #f59e0b; }
+.fill-company { background: #8b5cf6; }
+.fill-general { background: #6b7280; }
+.bar-value { width: 40px; text-align: right; font-weight: 600; }
+@media (max-width: 900px) { .report-grid { grid-template-columns: 1fr; } .report-stats { grid-column: 1; grid-row: auto; } }
+</style>
+{% endblock %}

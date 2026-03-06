@@ -1,0 +1,106 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if form_action == 'edit' %}
+<a href="{% url 'panel:case_detail' case.pk %}" class="btn btn-text">← Back to Case</a>
+{% else %}
+<a href="{% url 'panel:cases_list' %}" class="btn btn-text">← Back to Cases</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <div class="panel-card form-card">
+        <div class="card-body">
+            <form method="post" class="admin-form">
+                {% csrf_token %}
+                
+                {% if form_action == 'add' %}
+                <div class="form-group">
+                    <label for="user_id">User *</label>
+                    <select id="user_id" name="user_id" class="form-select" required>
+                        <option value="">Select a user...</option>
+                        {% for user in users %}
+                        <option value="{{ user.pk }}">{{ user.username|default:user.telegram_id }} - {{ user.first_name|default:"" }} {{ user.last_name|default:"" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                <div class="form-group">
+                    <label>User</label>
+                    <div class="form-static">
+                        <a href="{% url 'panel:user_detail' case.user.pk %}">{{ case.user.username|default:case.user.telegram_id }}</a>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="service">Service *</label>
+                        <select id="service" name="service" class="form-select" required>
+                            {% for value, label in service_choices %}
+                            <option value="{{ value }}" {% if case and case.service == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="status">Status</label>
+                        <select id="status" name="status" class="form-select">
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if case and case.status == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="payment_status">Payment Status</label>
+                        <select id="payment_status" name="payment_status" class="form-select">
+                            {% for value, label in payment_choices %}
+                            <option value="{{ value }}" {% if case and case.payment_status == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="currency">Currency</label>
+                        <select id="currency" name="currency" class="form-select">
+                            <option value="GBP" {% if case and case.currency == 'GBP' %}selected{% endif %}>GBP (£)</option>
+                            <option value="USD" {% if case and case.currency == 'USD' %}selected{% endif %}>USD ($)</option>
+                            <option value="EUR" {% if case and case.currency == 'EUR' %}selected{% endif %}>EUR (€)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="total_amount">Total Amount</label>
+                        <input type="number" step="0.01" id="total_amount" name="total_amount" class="form-input" value="{% if case %}{{ case.total_amount }}{% else %}0{% endif %}">
+                    </div>
+                    <div class="form-group">
+                        <label for="paid_amount">Paid Amount</label>
+                        <input type="number" step="0.01" id="paid_amount" name="paid_amount" class="form-input" value="{% if case %}{{ case.paid_amount }}{% else %}0{% endif %}">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" name="notes" class="form-textarea" rows="4" placeholder="Internal notes about this case...">{% if case %}{{ case.notes|default:"" }}{% endif %}</textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">{% if form_action == 'edit' %}Save Changes{% else %}Create Case{% endif %}</button>
+                    {% if form_action == 'edit' %}
+                    <a href="{% url 'panel:case_detail' case.pk %}" class="btn btn-outline">Cancel</a>
+                    {% else %}
+                    <a href="{% url 'panel:cases_list' %}" class="btn btn-outline">Cancel</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

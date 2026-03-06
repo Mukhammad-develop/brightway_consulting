@@ -1,0 +1,100 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}Files{% endblock %}
+{% block page_title_header %}Files{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:file_upload' %}" class="btn btn-primary">+ Upload File</a>
+{% endblock %}
+
+{% block content %}
+<div class="list-page">
+    <!-- Filters -->
+    <div class="filter-bar">
+        <form method="get" class="filter-form">
+            <div class="filter-group">
+                <input type="text" name="search" value="{{ search_query }}" placeholder="Search by filename..." class="form-input search-input">
+            </div>
+            <div class="filter-group">
+                <select name="file_type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for ft in file_types %}
+                    <option value="{{ ft }}" {% if type_filter == ft %}selected{% endif %}>{{ ft|upper }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-outline">Filter</button>
+            {% if search_query or type_filter or case_filter %}
+            <a href="{% url 'panel:files_list' %}" class="btn btn-text">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    
+    <!-- Results Info -->
+    <div class="results-info">
+        <span>{{ total_count }} file{{ total_count|pluralize }}</span>
+    </div>
+    
+    <!-- Files Table -->
+    <div class="panel-card">
+        <div class="card-body no-padding">
+            {% if page_obj %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>File</th>
+                        <th>Type</th>
+                        <th>Case</th>
+                        <th>User</th>
+                        <th>Uploaded</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in page_obj %}
+                    <tr>
+                        <td>{{ doc.pk }}</td>
+                        <td>
+                            <div class="file-cell">
+                                <span class="file-icon">{{ doc.icon }}</span>
+                                <span class="file-name">{{ doc.file_path|default:"Document"|truncatechars:40 }}</span>
+                            </div>
+                        </td>
+                        <td><span class="type-badge">{{ doc.file_type|default:"unknown"|upper }}</span></td>
+                        <td><a href="{% url 'panel:case_detail' doc.case.pk %}" class="link">Case #{{ doc.case.pk }}</a></td>
+                        <td><a href="{% url 'panel:user_detail' doc.case.user.pk %}" class="link">{{ doc.case.user.username|default:doc.case.user.telegram_id }}</a></td>
+                        <td>{{ doc.uploaded_at|date:"M d, Y" }}</td>
+                        <td class="actions">
+                            <a href="{% url 'panel:file_detail' doc.pk %}" class="btn btn-xs" title="View">View</a>
+                            <a href="{% url 'panel:file_view' doc.pk %}?download=1" class="btn btn-xs btn-outline" title="Download">↓</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No files found</p>
+                <a href="{% url 'panel:file_upload' %}" class="btn btn-primary">Upload First File</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&file_type={{ type_filter }}" class="btn btn-sm btn-outline">&laquo; Previous</a>
+        {% endif %}
+        
+        <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&file_type={{ type_filter }}" class="btn btn-sm btn-outline">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

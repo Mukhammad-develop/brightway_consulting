@@ -1,0 +1,180 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:services_list' %}" class="btn btn-outline">← Back to Services</a>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        
+        <div class="panel-card">
+            <div class="card-header">General Information</div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Service Name *</label>
+                        <input type="text" name="name" class="form-input" value="{{ service.name|default:'' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Slug (machine name)</label>
+                        <input type="text" name="slug" class="form-input" value="{{ service.slug|default:'' }}" 
+                               {% if form_action == 'edit' %}readonly{% endif %}
+                               placeholder="auto-generated from name">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" class="form-textarea" rows="3">{{ service.description|default:'' }}</textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Name (Russian)</label>
+                        <input type="text" name="name_ru" class="form-input" value="{{ service.name_ru|default:'' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Name (Uzbek)</label>
+                        <input type="text" name="name_uz" class="form-input" value="{{ service.name_uz|default:'' }}">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Description (Russian)</label>
+                    <textarea name="description_ru" class="form-textarea" rows="2">{{ service.description_ru|default:'' }}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Description (Uzbek)</label>
+                    <textarea name="description_uz" class="form-textarea" rows="2">{{ service.description_uz|default:'' }}</textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group form-group-icon-emoji">
+                        <label>Icon Emoji</label>
+                        <input type="text" name="icon_emoji" id="icon_emoji_input" class="form-input" value="{{ service.icon_emoji|default:'📋' }}" style="width: 80px;">
+                        <div class="icon-emoji-picker" aria-label="Choose icon">
+                            <button type="button" class="icon-emoji-btn" data-emoji="📋" title="Clipboard">📋</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="🎓" title="Graduation">🎓</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="📄" title="Document">📄</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="✈️" title="Visa / Travel">✈️</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="💼" title="Business">💼</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="🏢" title="Company">🏢</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="💰" title="Money / Tax">💰</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="📑" title="Tax / Forms">📑</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="👤" title="Self / Individual">👤</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="📁" title="Folder / Files">📁</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="✅" title="Done / Check">✅</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Badge Color</label>
+                        <select name="badge_color" class="form-select">
+                            <option value="general" {% if service.badge_color == 'general' %}selected{% endif %}>General (Gray)</option>
+                            <option value="student" {% if service.badge_color == 'student' %}selected{% endif %}>Student (Blue)</option>
+                            <option value="paye" {% if service.badge_color == 'paye' %}selected{% endif %}>PAYE (Green)</option>
+                            <option value="self" {% if service.badge_color == 'self' %}selected{% endif %}>Self (Orange)</option>
+                            <option value="company" {% if service.badge_color == 'company' %}selected{% endif %}>Company (Purple)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Display Order</label>
+                        <input type="number" name="display_order" class="form-input" value="{{ service.display_order|default:0 }}" style="width: 80px;">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_active" {% if service.is_active or form_action == 'add' %}checked{% endif %}>
+                        <span>Active</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel-card">
+            <div class="card-header">AI Configuration</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Keywords (comma-separated)</label>
+                    <input type="text" name="keywords" class="form-input" value="{{ service.keywords|default:'' }}"
+                           placeholder="student, visa, university, uni">
+                    <small>Used to automatically detect this service from user messages</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>AI System Prompt</label>
+                    <textarea name="ai_system_prompt" class="form-textarea prompt-textarea" rows="10"
+                              placeholder="You are a helpful assistant for student visa applications...">{{ service.ai_system_prompt|default:'' }}</textarea>
+                    <small>The full system prompt sent to GPT-4 when handling this service</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Items to Collect (JSON array or one per line)</label>
+                    <textarea name="ai_collect_items" class="form-textarea" rows="4"
+                              placeholder='["Full name", "Passport number", "Date of birth"]'>{{ service.ai_collect_items|default:'' }}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Documents List (JSON array or one per line)</label>
+                    <textarea name="ai_documents_list" class="form-textarea" rows="4"
+                              placeholder='["Passport scan", "Bank statement", "Proof of address"]'>{{ service.ai_documents_list|default:'' }}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="ai_strict_flow" {% if service.ai_strict_flow %}checked{% endif %}>
+                        <span>Strict Flow Mode</span>
+                    </label>
+                    <small>If enabled, AI follows the system prompt as a strict step-by-step flow</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">{% if form_action == 'add' %}Create Service{% else %}Save Changes{% endif %}</button>
+            <a href="{% url 'panel:services_list' %}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.form-container { max-width: 900px; }
+.form-container .form-input,
+.form-container .form-textarea { padding-left: 8px; padding-right: 10px; }
+.prompt-textarea { font-family: 'Monaco', 'Menlo', monospace; font-size: 0.85rem; background: var(--bg-tertiary); }
+.form-group-icon-emoji { display: flex; flex-direction: column; gap: 0.5rem; }
+.icon-emoji-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.25rem; }
+.icon-emoji-btn { width: 2.25rem; height: 2.25rem; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+.icon-emoji-btn:hover { background: var(--bg-elevated); border-color: var(--accent-primary); }
+.icon-emoji-btn.selected { background: rgba(233, 69, 96, 0.2); border-color: var(--accent-primary); }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.querySelector('.form-container form');
+    if (form) {
+        form.querySelectorAll('input[type="text"], input:not([type]), textarea').forEach(function(el) {
+            if (el.value && typeof el.value === 'string') el.value = el.value.trim();
+        });
+    }
+});
+(function() {
+    var input = document.getElementById('icon_emoji_input');
+    if (!input) return;
+    var current = (input.value || '').trim();
+    document.querySelectorAll('.icon-emoji-btn').forEach(function(btn) {
+        if (btn.getAttribute('data-emoji') === current) btn.classList.add('selected');
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.icon-emoji-btn').forEach(function(b) { b.classList.remove('selected'); });
+            btn.classList.add('selected');
+            input.value = btn.getAttribute('data-emoji');
+            input.focus();
+        });
+    });
+})();
+</script>
+{% endblock %}

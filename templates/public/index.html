@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brightway Consulting - Expert Tax & Immigration Services</title>
+    <meta name="description" content="Professional consulting services for student visas, tax refunds, self-assessment, and company accounting in the UK.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Scroll Progress Bar -->
+    <div class="scroll-progress"></div>
+
+    <!-- Navigation -->
+    <nav id="nav">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <span class="logo-icon">✦</span>
+                <span class="logo-text">Brightway</span>
+                <span class="logo-accent">Consulting</span>
+            </a>
+            
+            <div class="nav-links">
+                <a href="/" class="nav-link active" data-i18n="nav_home">Home</a>
+                <a href="/services/" class="nav-link" data-i18n="nav_services">Services</a>
+                <a href="/contact/" class="nav-link" data-i18n="nav_contact">Contact</a>
+            </div>
+            
+            <div class="nav-actions">
+                <!-- Language Switcher -->
+                <div class="lang-switcher">
+                    <button class="lang-btn" id="langToggle">
+                        <span class="lang-flag" id="currentFlag">🇬🇧</span>
+                        <span class="lang-code" id="currentLang">EN</span>
+                        <svg class="lang-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="lang-dropdown" id="langDropdown">
+                        <button class="lang-option" data-lang="en" data-flag="🇬🇧">
+                            <span class="lang-flag">🇬🇧</span> English
+                        </button>
+                        <button class="lang-option" data-lang="ru" data-flag="🇷🇺">
+                            <span class="lang-flag">🇷🇺</span> Русский
+                        </button>
+                        <button class="lang-option" data-lang="uz" data-flag="🇺🇿">
+                            <span class="lang-flag">🇺🇿</span> O'zbek
+                        </button>
+                    </div>
+                </div>
+                
+                <a href="/admin/login" class="nav-admin-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </a>
+            </div>
+            
+            <button class="nav-mobile-toggle" id="mobileToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu -->
+    <div class="mobile-menu" id="mobileMenu">
+        <a href="/" class="mobile-link" data-i18n="nav_home">Home</a>
+        <a href="/services/" class="mobile-link" data-i18n="nav_services">Services</a>
+        <a href="/contact/" class="mobile-link" data-i18n="nav_contact">Contact</a>
+        <div class="mobile-lang">
+            <button class="mobile-lang-btn" data-lang="en">🇬🇧 EN</button>
+            <button class="mobile-lang-btn" data-lang="ru">🇷🇺 RU</button>
+            <button class="mobile-lang-btn" data-lang="uz">🇺🇿 UZ</button>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-glow"></div>
+        <div class="hero-glow-2"></div>
+        <div class="hero-particles" id="particles"></div>
+        
+        <div class="hero-content">
+            <div class="hero-badge" data-aos="fade-down">
+                <span class="badge-dot"></span>
+                <span data-i18n="hero_badge">Trusted by 500+ clients in the UK</span>
+            </div>
+            
+            <h1 class="hero-title" data-aos="fade-up">
+                <span data-i18n="hero_title_1">Expert Consulting for</span><br>
+                <span class="gradient-text" data-i18n="hero_title_2">Tax & Immigration</span>
+            </h1>
+            
+            <p class="hero-subtitle" data-aos="fade-up" data-aos-delay="100" data-i18n="hero_subtitle">
+                Professional assistance with student visas, tax refunds, self-assessment returns, and company accounting. We make complex processes simple.
+            </p>
+            
+            <div class="hero-cta" data-aos="fade-up" data-aos-delay="200">
+                <a href="https://t.me/brightway_consulting_uk" target="_blank" class="btn btn-primary btn-glow">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.89.03-.24.38-.49 1.05-.74 4.12-1.79 6.87-2.97 8.26-3.54 3.93-1.63 4.75-1.91 5.28-1.92.12 0 .38.03.55.17.14.12.18.28.2.45-.01.07-.01.13-.01.21z"/>
+                    </svg>
+                    <span data-i18n="hero_cta">Start Free Consultation</span>
+                </a>
+                <a href="/services/" class="btn btn-secondary">
+                    <span data-i18n="hero_cta_secondary">View Services</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+            
+            <div class="hero-stats" data-aos="fade-up" data-aos-delay="300">
+                <div class="hero-stat">
+                    <span class="stat-number">500+</span>
+                    <span class="stat-label" data-i18n="stat_clients">Happy Clients</span>
+                </div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat">
+                    <span class="stat-number">98%</span>
+                    <span class="stat-label" data-i18n="stat_success">Success Rate</span>
+                </div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat">
+                    <span class="stat-number">24/7</span>
+                    <span class="stat-label" data-i18n="stat_support">24/7 Support</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="hero-scroll">
+            <span data-i18n="scroll_down">Scroll to explore</span>
+            <div class="scroll-indicator">
+                <div class="scroll-dot"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Services Section -->
+    <section class="feature-section" id="services">
+        <div class="container">
+            <div class="feature-header" data-aos="fade-up">
+                <span class="section-label" data-i18n="services_label">Our Services</span>
+                <h2 class="section-title" data-i18n="services_title">Comprehensive Solutions for Your Needs</h2>
+                <p class="section-desc" data-i18n="services_desc">From visa applications to tax returns, we provide expert guidance every step of the way.</p>
+            </div>
+            
+            <div class="feature-grid services-{{ services|length }}">
+                {% for service in services %}
+                <div class="feature-card" data-aos="fade-up" data-aos-delay="{{ forloop.counter0|add:100 }}">
+                    <div class="card-icon badge-{{ service.badge_color|default:service.slug }}">
+                        {{ service.icon_emoji }}
+                    </div>
+                    <h3 class="card-title">{{ service.name }}</h3>
+                    <p class="card-desc">{{ service.description }}</p>
+                    <a href="/services/" class="card-link">
+                        <span data-i18n="learn_more">Learn more</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <!-- Process Section -->
+    <section class="process-section">
+        <div class="container">
+            <div class="feature-header" data-aos="fade-up">
+                <span class="section-label" data-i18n="process_label">How It Works</span>
+                <h2 class="section-title" data-i18n="process_title">Simple 4-Step Process</h2>
+                <p class="section-desc" data-i18n="process_desc">Get started in minutes with our consultation system.</p>
+            </div>
+            
+            <div class="process-timeline">
+                <div class="process-line"></div>
+                
+                <div class="process-item" data-aos="fade-right">
+                    <div class="process-number">
+                        <span>01</span>
+                        <div class="process-icon">
+                            <!-- Channel icon -->
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="10" rx="2"/>
+                                <circle cx="12" cy="5" r="2"/>
+                                <path d="M12 7v4"/>
+                                <line x1="8" y1="16" x2="8" y2="16"/>
+                                <line x1="16" y1="16" x2="16" y2="16"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="process-content">
+                        <h3 data-i18n="process_1_title">Start a Conversation</h3>
+                        <p data-i18n="process_1_desc">Open our Telegram channel and tell us what you need help with. We support English, Russian, and Uzbek.</p>
+                    </div>
+                </div>
+                
+                <div class="process-item reverse" data-aos="fade-left">
+                    <div class="process-number">
+                        <span>02</span>
+                        <div class="process-icon">
+                            <!-- Clipboard/Form icon -->
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                                <path d="M9 12h6"/>
+                                <path d="M9 16h6"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="process-content">
+                        <h3 data-i18n="process_2_title">Share Your Details</h3>
+                        <p data-i18n="process_2_desc">Answer a few questions about your situation. We'll guide you through exactly what information we need.</p>
+                    </div>
+                </div>
+                
+                <div class="process-item" data-aos="fade-right">
+                    <div class="process-number">
+                        <span>03</span>
+                        <div class="process-icon">
+                            <!-- Document/File icon -->
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14,2 14,8 20,8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="process-content">
+                        <h3 data-i18n="process_3_title">Upload Documents</h3>
+                        <p data-i18n="process_3_desc">Send photos of your documents directly in the chat. We securely store and process everything.</p>
+                    </div>
+                </div>
+                
+                <div class="process-item reverse" data-aos="fade-left">
+                    <div class="process-number">
+                        <span>04</span>
+                        <div class="process-icon">
+                            <!-- Checkmark/Success icon -->
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                <polyline points="22,4 12,14.01 9,11.01"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="process-content">
+                        <h3 data-i18n="process_4_title">We Handle the Rest</h3>
+                        <p data-i18n="process_4_desc">Our expert consultants review your case and take care of all the paperwork and submissions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats-section">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-card" data-aos="zoom-in" data-aos-delay="0">
+                    <div class="stat-icon">⏰</div>
+                    <div class="stat-value">24/7</div>
+                    <div class="stat-text" data-i18n="stat_24_7">24/7 Support</div>
+                </div>
+                
+                <div class="stat-card" data-aos="zoom-in" data-aos-delay="100">
+                    <div class="stat-icon">🌍</div>
+                    <div class="stat-value">3</div>
+                    <div class="stat-text" data-i18n="stat_languages">Languages Supported</div>
+                </div>
+                
+                <div class="stat-card" data-aos="zoom-in" data-aos-delay="200">
+                    <div class="stat-icon">🇬🇧</div>
+                    <div class="stat-value">100%</div>
+                    <div class="stat-text" data-i18n="stat_compliant">UK Compliant</div>
+                </div>
+                
+                <div class="stat-card" data-aos="zoom-in" data-aos-delay="300">
+                    <div class="stat-icon">🔒</div>
+                    <div class="stat-value">100%</div>
+                    <div class="stat-text" data-i18n="stat_secure">Secure & Private</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Why Choose Us Section -->
+    <section class="why-section">
+        <div class="container">
+            <div class="why-grid">
+                <div class="why-content" data-aos="fade-right">
+                    <span class="section-label" data-i18n="why_label">Why Choose Us</span>
+                    <h2 class="section-title" data-i18n="why_title">Your Trusted Partner in the UK</h2>
+                    <p class="section-desc" data-i18n="why_desc">We combine expert knowledge with efficient processes to deliver exceptional results.</p>
+                    
+                    <div class="why-features">
+                        <div class="why-feature">
+                            <div class="why-icon">✓</div>
+                            <div class="why-text">
+                                <h4 data-i18n="why_1_title">Expert Consultants</h4>
+                                <p data-i18n="why_1_desc">Qualified professionals with years of UK tax and immigration experience.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="why-feature">
+                            <div class="why-icon">✓</div>
+                            <div class="why-text">
+                                <h4 data-i18n="why_2_title">Quick Response</h4>
+                                <p data-i18n="why_2_desc">Get updates and reach us anytime through our Telegram channel.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="why-feature">
+                            <div class="why-icon">✓</div>
+                            <div class="why-text">
+                                <h4 data-i18n="why_3_title">Transparent Pricing</h4>
+                                <p data-i18n="why_3_desc">No hidden fees. Know exactly what you'll pay before you start.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="why-feature">
+                            <div class="why-icon">✓</div>
+                            <div class="why-text">
+                                <h4 data-i18n="why_4_title">Multilingual Support</h4>
+                                <p data-i18n="why_4_desc">Communicate in English, Russian, or Uzbek — whatever you prefer.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="why-visual" data-aos="fade-left">
+                    <div class="visual-card">
+                        <div class="visual-glow"></div>
+                        <div class="visual-content">
+                            <div class="visual-chat">
+                                <div class="chat-bubble user">
+                                    <span>I need help with my tax refund</span>
+                                </div>
+                                <div class="chat-bubble bot">
+                                    <span>I'd be happy to help! 🎯 Let me ask you a few questions to understand your situation better...</span>
+                                </div>
+                                <div class="chat-typing">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-box" data-aos="zoom-in">
+                <div class="cta-glow"></div>
+                <div class="cta-content">
+                    <h2 data-i18n="cta_title">Ready to Get Started?</h2>
+                    <p data-i18n="cta_desc">Start your free consultation today. Our channel is available 24/7 to help you.</p>
+                    
+                    <a href="https://t.me/brightway_consulting_uk" target="_blank" class="btn btn-primary btn-large btn-glow">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.89.03-.24.38-.49 1.05-.74 4.12-1.79 6.87-2.97 8.26-3.54 3.93-1.63 4.75-1.91 5.28-1.92.12 0 .38.03.55.17.14.12.18.28.2.45-.01.07-.01.13-.01.21z"/>
+                        </svg>
+                        <span data-i18n="cta_button">Start Free Consultation</span>
+                    </a>
+                    
+                    <div class="cta-trust">
+                        <span>🔒</span>
+                        <span data-i18n="cta_trust">Secure • Confidential • Professional</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="/" class="footer-logo">
+                        <span class="logo-icon">✦</span>
+                        <span class="logo-text">Brightway</span>
+                        <span class="logo-accent">Consulting</span>
+                    </a>
+                    <p class="footer-legal">Brightway Consulting Limited<br>Company number 14813206</p>
+                    <p data-i18n="footer_desc">Professional consulting services for tax, immigration, and business needs in the UK.</p>
+                    <div class="footer-social">
+                        <a href="https://t.me/brightway_consulting_uk" target="_blank" aria-label="Telegram Channel">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.89.03-.24.38-.49 1.05-.74 4.12-1.79 6.87-2.97 8.26-3.54 3.93-1.63 4.75-1.91 5.28-1.92.12 0 .38.03.55.17.14.12.18.28.2.45-.01.07-.01.13-.01.21z"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_services">Services</h4>
+                    <a href="/services/" data-i18n="service_student">Student Visa</a>
+                    <a href="/services/" data-i18n="service_paye">PAYE Tax Refund</a>
+                    <a href="/services/" data-i18n="service_self">Self Assessment</a>
+                    <a href="/services/" data-i18n="service_company">Company Accounting</a>
+                </div>
+                
+                <div class="footer-links">
+                    <h4>Location</h4>
+                    <address class="footer-address">
+                        195 Wood Street,<br>
+                        London,<br>
+                        England, E17 3NU
+                    </address>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_company">Company</h4>
+                    <a href="/" data-i18n="nav_home">Home</a>
+                    <a href="/services/" data-i18n="nav_services">Services</a>
+                    <a href="/contact/" data-i18n="nav_contact">Contact</a>
+                    <a href="/admin/login" data-i18n="footer_admin">Admin Panel</a>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_contact">Contact</h4>
+                    <a href="mailto:info@brightwayconsulting.co.uk">info@brightwayconsulting.co.uk</a>
+                    <a href="tel:+447435604403">+44 7435 604403</a>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>© 2024 Brightway Consulting Limited. <span data-i18n="footer_rights">All rights reserved.</span></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

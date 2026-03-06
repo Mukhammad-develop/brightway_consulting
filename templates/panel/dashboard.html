@@ -1,0 +1,239 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_title_header %}Dashboard{% endblock %}
+
+{% block topbar_actions %}
+<div class="quick-actions">
+    <a href="{% url 'panel:user_add' %}" class="btn btn-sm btn-outline">+ Add User</a>
+    <a href="{% url 'panel:case_add' %}" class="btn btn-sm btn-primary">+ Add Case</a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-content">
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon users">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ total_users }}</div>
+                <div class="stat-label">Total Users</div>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon cases">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ total_cases }}</div>
+                <div class="stat-label">Total Cases</div>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon revenue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"/>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">£{{ total_revenue|floatformat:0 }}</div>
+                <div class="stat-label">Total Revenue</div>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+            </div>
+            <div class="stat-info">
+                <div class="stat-value">{{ active_cases }}</div>
+                <div class="stat-label">Active Cases</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Two Column Layout -->
+    <div class="dashboard-grid">
+        <!-- Recent Cases -->
+        <div class="panel-card">
+            <div class="card-header">
+                <h3>Recent Cases</h3>
+                <a href="{% url 'panel:cases_list' %}" class="link-btn">View All →</a>
+            </div>
+            <div class="card-body">
+                {% if recent_cases %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Service</th>
+                            <th>User</th>
+                            <th>Status</th>
+                            <th>Payment</th>
+                            <th>Date</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for case in recent_cases %}
+                        <tr>
+                            <td>{{ case.pk }}</td>
+                            <td><span class="badge badge-{{ case.service }}">{{ case.get_service_display }}</span></td>
+                            <td>{{ case.user.username|default:case.user.telegram_id }}</td>
+                            <td><span class="status-badge status-{{ case.status }}">{{ case.get_status_display }}</span></td>
+                            <td><span class="status-badge payment-{{ case.payment_status }}">{{ case.get_payment_status_display }}</span></td>
+                            <td>{{ case.created_at|date:"M d" }}</td>
+                            <td><a href="{% url 'panel:case_detail' case.pk %}" class="btn btn-xs">View</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <p>No cases yet</p>
+                    <a href="{% url 'panel:case_add' %}" class="btn btn-sm btn-primary">Create First Case</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Cases by Service Chart -->
+        <div class="panel-card">
+            <div class="card-header">
+                <h3>Cases by Service</h3>
+            </div>
+            <div class="card-body">
+                {% if cases_service_chart %}
+                <div class="chart-bars">
+                    {% for item in cases_service_chart %}
+                    <div class="bar-row">
+                        <div class="bar-label">{{ item.label }}</div>
+                        <div class="bar-track">
+                            <div class="bar-fill fill-{{ item.service }}" data-pct="{{ item.pct }}"></div>
+                        </div>
+                        <div class="bar-value">{{ item.count }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p>No case data available</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- AI Usage Statistics -->
+    {% if is_elevated %}
+    <div class="panel-card ai-stats-card">
+        <div class="card-header">
+            <h3>🤖 AI Usage (Today)</h3>
+        </div>
+        <div class="card-body">
+            <div class="ai-stats-grid">
+                <div class="ai-stat">
+                    <span class="ai-stat-value">{{ ai_stats.api_calls_today }}</span>
+                    <span class="ai-stat-label">API Calls</span>
+                </div>
+                <div class="ai-stat">
+                    <span class="ai-stat-value">{{ ai_stats.total_tokens_today|floatformat:0 }}</span>
+                    <span class="ai-stat-label">Tokens Used</span>
+                </div>
+                <div class="ai-stat">
+                    <span class="ai-stat-value">{{ ai_stats.avg_response_time }}s</span>
+                    <span class="ai-stat-label">Avg Response</span>
+                </div>
+                <div class="ai-stat {% if ai_stats.error_rate > 10 %}ai-stat-warning{% endif %}">
+                    <span class="ai-stat-value">{{ ai_stats.error_rate }}%</span>
+                    <span class="ai-stat-label">Error Rate</span>
+                </div>
+                <div class="ai-stat">
+                    <span class="ai-stat-value">{{ transcribed_docs }}</span>
+                    <span class="ai-stat-label">Transcriptions</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Recent Users -->
+    <div class="panel-card">
+        <div class="card-header">
+            <h3>Recent Users</h3>
+            <a href="{% url 'panel:users_list' %}" class="link-btn">View All →</a>
+        </div>
+        <div class="card-body">
+            {% if recent_users %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Telegram ID</th>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Phone</th>
+                        <th>Language</th>
+                        <th>Joined</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in recent_users %}
+                    <tr>
+                        <td>{{ user.pk }}</td>
+                        <td>{{ user.telegram_id }}</td>
+                        <td>{{ user.first_name|default:"-" }} {{ user.last_name|default:"" }}</td>
+                        <td>{% if user.username %}@{{ user.username }}{% else %}-{% endif %}</td>
+                        <td>{{ user.phone|default:"-" }}</td>
+                        <td>
+                            {% if user.language_code == 'en' %}🇬🇧{% elif user.language_code == 'ru' %}🇷🇺{% elif user.language_code == 'uz' %}🇺🇿{% else %}🌐{% endif %}
+                            {{ user.language_code|upper }}
+                        </td>
+                        <td>{{ user.created_at|date:"M d, Y" }}</td>
+                        <td><a href="{% url 'panel:user_detail' user.pk %}" class="btn btn-xs">View</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No users yet</p>
+                <a href="{% url 'panel:user_add' %}" class="btn btn-sm btn-primary">Add First User</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Animate bar fills on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.bar-fill').forEach(function(bar) {
+        const pct = bar.getAttribute('data-pct');
+        setTimeout(function() {
+            bar.style.width = pct + '%';
+        }, 100);
+    });
+});
+</script>
+{% endblock %}

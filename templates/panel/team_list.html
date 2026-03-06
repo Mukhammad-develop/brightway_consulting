@@ -1,0 +1,164 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:team_add' %}" class="btn btn-primary">+ Add Team Member</a>
+{% endblock %}
+
+{% block content %}
+<div class="team-container">
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <input type="text" name="search" class="form-input" placeholder="Search by name..." 
+               value="{{ search }}" onkeyup="if(event.key==='Enter') this.form.submit()">
+        <select name="role" class="form-select" onchange="filterByRole(this.value)">
+            <option value="">All Roles</option>
+            {% for value, label in roles %}
+            <option value="{{ value }}" {% if role_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <!-- Team Grid -->
+    {% if team_members %}
+    <div class="team-grid">
+        {% for member in team_members %}
+        <div class="team-card">
+            <div class="team-card-header">
+                <div class="member-avatar">{{ member.display_name|default:member.username|slice:":1"|upper }}</div>
+                <div class="member-info">
+                    <h3>{{ member.display_name|default:member.username }}</h3>
+                    <span class="badge role-{{ member.role }}">{{ member.get_role_display }}</span>
+                </div>
+                <div class="member-status {% if member.is_active %}active{% else %}inactive{% endif %}">
+                    {{ member.is_active|yesno:"Active,Inactive" }}
+                </div>
+            </div>
+            
+            <div class="team-card-body">
+                <div class="member-detail">
+                    <span class="label">Username</span>
+                    <span class="value">{{ member.username }}</span>
+                </div>
+                <div class="member-detail">
+                    <span class="label">Email</span>
+                    <span class="value">{{ member.email|default:"—" }}</span>
+                </div>
+                <div class="member-detail">
+                    <span class="label">Assigned Users</span>
+                    <span class="value">{{ member.assignment_count }}</span>
+                </div>
+                <div class="member-detail">
+                    <span class="label">Last Login</span>
+                    <span class="value">{{ member.last_login|date:"M d, Y H:i"|default:"Never" }}</span>
+                </div>
+                <div class="member-detail">
+                    <span class="label">Created</span>
+                    <span class="value">{{ member.created_at|date:"M d, Y" }}</span>
+                </div>
+            </div>
+            
+            <div class="team-card-footer">
+                <a href="{% url 'panel:team_edit' admin_id=member.pk %}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{% url 'panel:team_assignments' admin_id=member.pk %}" class="btn btn-outline btn-sm">Assignments</a>
+                {% if member.role != 'master' %}
+                <form method="post" action="{% url 'panel:team_delete' admin_id=member.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete {{ member.display_name }}?')">Delete</button>
+                </form>
+                {% else %}
+                <span class="protected-badge">Protected</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No team members found.</p>
+        <a href="{% url 'panel:team_add' %}" class="btn btn-primary">Add First Team Member</a>
+    </div>
+    {% endif %}
+    
+    <!-- Role Permissions Reference -->
+    <div class="panel-card permissions-card">
+        <div class="card-header">Role Permissions</div>
+        <div class="card-body">
+            <div class="permissions-grid">
+                <div class="permission-role">
+                    <h4><span class="badge role-master">Master</span></h4>
+                    <ul>
+                        <li>✓ Full access</li>
+                        <li>✓ Team management</li>
+                        <li>✓ Reports</li>
+                        <li>✓ AI profiles</li>
+                        <li>✓ Service management</li>
+                    </ul>
+                </div>
+                <div class="permission-role">
+                    <h4><span class="badge role-admin">Admin</span></h4>
+                    <ul>
+                        <li>✓ All user visibility</li>
+                        <li>✓ Reports</li>
+                        <li>✓ Service management</li>
+                        <li>✗ No team management</li>
+                    </ul>
+                </div>
+                <div class="permission-role">
+                    <h4><span class="badge role-consultant">Consultant</span></h4>
+                    <ul>
+                        <li>✓ Assigned users only</li>
+                        <li>✗ No reports</li>
+                        <li>✗ No team management</li>
+                        <li>✗ No service management</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.team-container { }
+.filter-bar { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+.filter-bar .form-input { max-width: 300px; }
+.filter-bar .form-select { max-width: 200px; }
+.team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+.team-card { background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; }
+.team-card-header { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+.member-avatar { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--primary-color); color: white; font-size: 1.25rem; font-weight: 600; border-radius: 50%; }
+.member-info { flex: 1; }
+.member-info h3 { margin: 0 0 0.25rem 0; font-size: 1.1rem; }
+.member-status { font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 20px; }
+.member-status.active { background: rgba(16, 185, 129, 0.35); color: #fff; }
+.member-status.inactive { background: rgba(107, 114, 128, 0.4); color: #e5e7eb; }
+.team-card-body { padding: 1rem 1.5rem; }
+.member-detail { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); }
+.member-detail:last-child { border-bottom: none; }
+.member-detail .label { color: var(--text-secondary); font-size: 0.9rem; }
+.member-detail .value { font-weight: 500; color: var(--text-primary); }
+.team-card-footer { display: flex; gap: 0.5rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); }
+.protected-badge { font-size: 0.75rem; color: var(--text-muted); padding: 0.25rem 0.5rem; }
+.role-master { background: #10b981; color: #fff; }
+.role-admin { background: #3b82f6; color: #fff; }
+.role-consultant { background: #6b7280; color: #fff; }
+.permissions-card { margin-top: 2rem; }
+.permissions-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+.permission-role h4 { margin: 0 0 0.75rem 0; }
+.permission-role ul { list-style: none; padding: 0; margin: 0; }
+.permission-role li { padding: 0.25rem 0; font-size: 0.9rem; }
+</style>
+
+<script>
+function filterByRole(role) {
+    const url = new URL(window.location);
+    if (role) {
+        url.searchParams.set('role', role);
+    } else {
+        url.searchParams.delete('role');
+    }
+    window.location = url;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}Cases{% endblock %}
+{% block page_title_header %}Cases{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:case_add' %}" class="btn btn-primary">+ Add Case</a>
+{% endblock %}
+
+{% block content %}
+<div class="list-page">
+    <!-- Filters -->
+    <div class="filter-bar">
+        <form method="get" class="filter-form">
+            <div class="filter-group">
+                <input type="text" name="search" value="{{ search_query }}" placeholder="Search by user, service..." class="form-input search-input">
+            </div>
+            <div class="filter-group">
+                <select name="service" class="form-select">
+                    <option value="">All Services</option>
+                    {% for value, label in service_choices %}
+                    <option value="{{ value }}" {% if service_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <select name="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <select name="payment_status" class="form-select">
+                    <option value="">All Payments</option>
+                    {% for value, label in payment_choices %}
+                    <option value="{{ value }}" {% if payment_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-outline">Filter</button>
+            {% if search_query or service_filter or status_filter or payment_filter %}
+            <a href="{% url 'panel:cases_list' %}" class="btn btn-text">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    
+    <!-- Results Info -->
+    <div class="results-info">
+        <span>{{ total_count }} case{{ total_count|pluralize }}</span>
+    </div>
+    
+    <!-- Cases Table -->
+    <div class="panel-card">
+        <div class="card-body no-padding">
+            {% if page_obj %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>User</th>
+                        <th>Service</th>
+                        <th>Status</th>
+                        <th>Payment</th>
+                        <th>Amount</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for case in page_obj %}
+                    <tr>
+                        <td>{{ case.pk }}</td>
+                        <td>
+                            <a href="{% url 'panel:user_detail' case.user.pk %}" class="user-link">
+                                {{ case.user.username|default:case.user.telegram_id }}
+                            </a>
+                        </td>
+                        <td><span class="badge badge-{{ case.service }}">{{ case.get_service_display }}</span></td>
+                        <td><span class="status-badge status-{{ case.status }}">{{ case.get_status_display }}</span></td>
+                        <td><span class="status-badge payment-{{ case.payment_status }}">{{ case.get_payment_status_display }}</span></td>
+                        <td>
+                            {% if case.total_amount %}
+                            {{ case.currency }} {{ case.total_amount|floatformat:0 }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ case.created_at|date:"M d, Y" }}</td>
+                        <td>{{ case.updated_at|date:"M d, Y" }}</td>
+                        <td class="actions">
+                            <a href="{% url 'panel:case_detail' case.pk %}" class="btn btn-xs" title="View">View</a>
+                            <a href="{% url 'panel:case_edit' case.pk %}" class="btn btn-xs btn-outline" title="Edit">Edit</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No cases found</p>
+                <a href="{% url 'panel:case_add' %}" class="btn btn-primary">Create First Case</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&service={{ service_filter }}&status={{ status_filter }}&payment_status={{ payment_filter }}" class="btn btn-sm btn-outline">&laquo; Previous</a>
+        {% endif %}
+        
+        <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&service={{ service_filter }}&status={{ status_filter }}&payment_status={{ payment_filter }}" class="btn btn-sm btn-outline">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

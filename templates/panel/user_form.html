@@ -1,0 +1,71 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+{% if form_action == 'edit' %}
+<a href="{% url 'panel:user_detail' user_obj.pk %}" class="btn btn-text">← Back to Profile</a>
+{% else %}
+<a href="{% url 'panel:users_list' %}" class="btn btn-text">← Back to Users</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <div class="panel-card form-card">
+        <div class="card-body">
+            <form method="post" class="admin-form">
+                {% csrf_token %}
+                
+                {% if form_action == 'add' %}
+                <div class="form-group">
+                    <label for="telegram_id">Telegram ID *</label>
+                    <input type="number" id="telegram_id" name="telegram_id" class="form-input" required placeholder="Enter Telegram user ID">
+                    <span class="form-hint">The unique numeric Telegram ID</span>
+                </div>
+                {% endif %}
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="first_name">First Name</label>
+                        <input type="text" id="first_name" name="first_name" class="form-input" value="{% if user_obj %}{{ user_obj.first_name|default:'' }}{% endif %}" placeholder="First name">
+                    </div>
+                    <div class="form-group">
+                        <label for="last_name">Last Name</label>
+                        <input type="text" id="last_name" name="last_name" class="form-input" value="{% if user_obj %}{{ user_obj.last_name|default:'' }}{% endif %}" placeholder="Last name">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" class="form-input" value="{% if user_obj %}{{ user_obj.username|default:'' }}{% endif %}" placeholder="@username (without @)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone">Phone Number</label>
+                    <input type="tel" id="phone" name="phone" class="form-input" value="{% if user_obj %}{{ user_obj.phone|default:'' }}{% endif %}" placeholder="+44 xxx xxxx xxxx">
+                </div>
+                
+                <div class="form-group">
+                    <label for="language_code">Language</label>
+                    <select id="language_code" name="language_code" class="form-select">
+                        <option value="en" {% if user_obj.language_code == 'en' %}selected{% endif %}>🇬🇧 English</option>
+                        <option value="ru" {% if user_obj.language_code == 'ru' %}selected{% endif %}>🇷🇺 Russian</option>
+                        <option value="uz" {% if user_obj.language_code == 'uz' %}selected{% endif %}>🇺🇿 Uzbek</option>
+                    </select>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">{% if form_action == 'edit' %}Save Changes{% else %}Create User{% endif %}</button>
+                    {% if form_action == 'edit' %}
+                    <a href="{% url 'panel:user_detail' user_obj.pk %}" class="btn btn-outline">Cancel</a>
+                    {% else %}
+                    <a href="{% url 'panel:users_list' %}" class="btn btn-outline">Cancel</a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

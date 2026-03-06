@@ -1,0 +1,16 @@
+# Brightway Consulting - Requirements
+# Django 6.0.3 Application
+
+# Core Framework
+Django>=4.2
+
+# Telegram Bot Integration
+pyTelegramBotAPI>=4.16.1
+Telethon>=1.36
+
+# AI/OpenAI Integration
+openai>=1.0.0
+
+# Utilities
+requests>=2.31
+python-dotenv>=1.0.1

@@ -1,0 +1,1172 @@
+"""
+AI Services for Brightway Consulting Telegram bot.
+
+Handles service detection, system prompts, AI interactions, voice transcription,
+and profile extraction using OpenAI APIs (GPT-4o-mini and Whisper-1).
+"""
+
+import os
+import re
+import sys
+import time
+import json
+import logging
+import subprocess
+import tempfile
+from pathlib import Path
+from functools import wraps
+
+# Bootstrap Django
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bwc.settings')
+
+import django
+django.setup()
+
+from django.conf import settings
+from .messages import t, get_service_name
+
+logger = logging.getLogger(__name__)
+
+# Project paths
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+UPLOADS_DIR = PROJECT_ROOT / 'uploads'
+
+# OpenAI client (lazy initialized)
+_openai_client = None
+
+# AI Usage tracking
+_ai_usage = {
+    'api_calls_today': 0,
+    'total_tokens_today': 0,
+    'errors_today': 0,
+    'last_reset': None,
+    'response_times': [],
+}
+
+# Rate limiting
+_rate_limit = {
+    'calls_per_minute': 60,
+    'last_calls': [],  # timestamps of recent calls
+}
+
+# Cache for service keywords
+_service_cache = {
+    'data': None,
+    'timestamp': 0,
+    'ttl': 60  # Refresh every 60 seconds
+}
+
+# Fallback hardcoded keywords (used when no DB services defined)
+SERVICE_KEYWORDS = {
+    'student': ['student', 'visa', 'university', 'uni', 'talaba', 'viza', 'студент', 'виза', 'университет', 'учеба'],
+    'paye': ['paye', 'employed', 'p60', 'p45', 'refund', 'hmrc', 'ish haqi', 'возврат', 'налог', 'работодатель'],
+    'self': ['self employed', 'freelance', 'utr', 'self assessment', 'mustaqil', 'самозанятый', 'фриланс'],
+    'company': ['company', 'limited', 'ltd', 'accounting', 'vat', 'kompaniya', 'компания', 'бухгалтерия'],
+}
+
+# Hardcoded service info (fallback)
+SERVICE_INFO = {
+    'student': {
+        'collect_items': ['Full name', 'Passport number', 'Date of birth', 'University name', 'Course details', 'CAS number'],
+        'documents': ['Passport scan', 'University acceptance letter', 'Financial documents', 'English test results']
+    },
+    'paye': {
+        'collect_items': ['Full name', 'National Insurance number', 'Tax years', 'Employer details'],
+        'documents': ['P45', 'P60', 'Payslips', 'ID document'],
+        'strict_flow': True
+    },
+    'self': {
+        'collect_items': ['Full name', 'UTR number', 'Tax year', 'Income sources', 'Expenses'],
+        'documents': ['ID document', 'Bank statements', 'Income records', 'Expense receipts']
+    },
+    'company': {
+        'collect_items': ['Company name', 'Company number', 'Director details', 'VAT registration'],
+        'documents': ['Certificate of incorporation', 'Bank statements', 'Invoices', 'Receipts']
+    }
+}
+
+# Tone rules for AI
+TONE_RULES = """
+TONE RULES:
+- Sound like a real consultant in a live chat, not a formal letter
+- Be friendly but professional
+- Use natural conversational language
+- Keep responses concise but helpful
+- Ask one question at a time
+- Acknowledge what the user says before asking for more
+"""
+
+# Anti-bot patterns
+ANTI_BOT_PATTERNS = """
+AVOID THESE PATTERNS:
+- Don't say "Great!", "Absolutely!", "Certainly!"
+- Don't say "Kindly provide..."
+- Don't use overly formal phrases
+- Don't repeat the same greeting structure
+- Don't use numbered lists for simple questions
+"""
+
+# Style examples
+STYLE_EXAMPLES = """
+GOOD EXAMPLES:
+EN: "Got it! And what's your passport number?"
+EN: "Thanks for that. Do you have a copy of your P45?"
+RU: "Понял! А какой у вас номер паспорта?"
+UZ: "Tushundim! Pasport raqamingiz qanday?"
+"""
+
+# Marker in AI response when info collection is complete and user should be assigned to a consultant
+READY_FOR_CONSULTANT_MARKER = '[READY_FOR_CONSULTANT]'
+
+# Behavior: collect information then assign to consultant
+COLLECT_AND_ASSIGN_BEHAVIOR = """
+YOUR ROLE:
+- You are an assistant for Brightway Consulting. Your job is to collect the information and documents we need for the user's service, then assign them to a human consultant.
+- At the start of the conversation (or when the user chooses a service), briefly state: you will collect the required information and then assign them to a consultant who will take over.
+- Collect information and documents step by step: ask for one thing at a time, acknowledge what they provide, then ask for the next. Use the "Information to collect" and "Documents to request" lists above as your checklist.
+- When you have collected ALL required information and documents listed for this service, end your reply with exactly """ + READY_FOR_CONSULTANT_MARKER + """ (on its own line, no other text after it). Before that line you may say e.g. "I have everything I need. I'm assigning you to a consultant who will contact you shortly."
+- Do NOT output """ + READY_FOR_CONSULTANT_MARKER + """ until you have collected every required item and document.
+"""
+
+# General system prompt
+GENERAL_SYSTEM_PROMPT = """You are a helpful AI assistant for Brightway Consulting, a UK-based consultancy 
+that helps with student visas, tax refunds, and company accounting.
+
+Your job is to:
+1. Understand what service the user needs
+2. Collect necessary information and documents (step by step)
+3. When collection is complete, assign them to a consultant (end your message with """ + READY_FOR_CONSULTANT_MARKER + """)
+4. Be helpful and professional
+
+If you can't determine what service they need, ask clarifying questions.
+"""
+
+
+# ============== OpenAI Client Management ==============
+
+def get_openai_client():
+    """Get or create OpenAI client with lazy initialization."""
+    global _openai_client
+    
+    if _openai_client is None:
+        import openai
+        api_key = getattr(settings, 'OPENAI_API_KEY', None) or os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            logger.error("OpenAI API key not configured")
+            return None
+        _openai_client = openai.OpenAI(api_key=api_key)
+    
+    return _openai_client
+
+
+def _check_rate_limit():
+    """Check if we're within rate limits. Returns True if OK to proceed."""
+    now = time.time()
+    # Remove calls older than 60 seconds
+    _rate_limit['last_calls'] = [t for t in _rate_limit['last_calls'] if now - t < 60]
+    
+    if len(_rate_limit['last_calls']) >= _rate_limit['calls_per_minute']:
+        return False
+    
+    _rate_limit['last_calls'].append(now)
+    return True
+
+
+def _track_usage(tokens=0, error=False, response_time=0):
+    """Track AI API usage for statistics."""
+    from datetime import datetime, date
+    
+    today = date.today()
+    if _ai_usage['last_reset'] != today:
+        _ai_usage['api_calls_today'] = 0
+        _ai_usage['total_tokens_today'] = 0
+        _ai_usage['errors_today'] = 0
+        _ai_usage['response_times'] = []
+        _ai_usage['last_reset'] = today
+    
+    _ai_usage['api_calls_today'] += 1
+    _ai_usage['total_tokens_today'] += tokens
+    if error:
+        _ai_usage['errors_today'] += 1
+    if response_time:
+        _ai_usage['response_times'].append(response_time)
+        # Keep only last 100 response times
+        if len(_ai_usage['response_times']) > 100:
+            _ai_usage['response_times'] = _ai_usage['response_times'][-100:]
+
+
+def get_ai_usage_stats():
+    """Get AI usage statistics for the admin panel."""
+    response_times = _ai_usage['response_times']
+    avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+    
+    return {
+        'api_calls_today': _ai_usage['api_calls_today'],
+        'total_tokens_today': _ai_usage['total_tokens_today'],
+        'errors_today': _ai_usage['errors_today'],
+        'avg_response_time': round(avg_response_time, 2),
+        'error_rate': round(_ai_usage['errors_today'] / max(_ai_usage['api_calls_today'], 1) * 100, 1),
+    }
+
+
+# ============== Service Detection ==============
+
+def _load_services_from_db():
+    """Load active services from database."""
+    from core.models import ServiceDefinition
+    
+    services = {}
+    try:
+        for svc in ServiceDefinition.objects.filter(is_active=True):
+            keywords = svc.get_keywords_list()
+            if keywords:
+                services[svc.slug] = keywords
+    except Exception as e:
+        logger.error(f"Error loading services from DB: {e}")
+    
+    return services
+
+
+def _get_cached_services():
+    """Get cached services or refresh from DB."""
+    now = time.time()
+    
+    if _service_cache['data'] is None or (now - _service_cache['timestamp']) > _service_cache['ttl']:
+        db_services = _load_services_from_db()
+        if db_services:
+            _service_cache['data'] = db_services
+        else:
+            _service_cache['data'] = SERVICE_KEYWORDS
+        _service_cache['timestamp'] = now
+    
+    return _service_cache['data']
+
+
+def detect_service(text: str) -> str:
+    """
+    Detect which service the user is asking about based on keywords.
+    Fast keyword-based detection.
+    
+    Args:
+        text: User message text
+        
+    Returns:
+        Service slug (student, paye, self, company) or None
+    """
+    if not text:
+        return None
+    
+    text_lower = text.lower()
+    services = _get_cached_services()
+    
+    for service, keywords in services.items():
+        for keyword in keywords:
+            if keyword.lower() in text_lower:
+                return service
+    
+    return None
+
+
+def ai_detect_service(text: str, conversation_history: list = None) -> str:
+    """
+    Use AI to detect which service the user needs.
+    More accurate but slower than keyword matching.
+    
+    Args:
+        text: User message text
+        conversation_history: Optional conversation context
+        
+    Returns:
+        Service slug or None
+    """
+    # First try keyword detection (fast)
+    keyword_result = detect_service(text)
+    if keyword_result:
+        return keyword_result
+    
+    # Use AI for more nuanced detection
+    client = get_openai_client()
+    if not client:
+        return None
+    
+    system_prompt = """You are a service classifier for a UK consulting firm.
+Based on the user message, determine which service they need:
+- "student" - Student visa, university applications, educational guidance
+- "paye" - PAYE tax refund, employed tax returns, P45/P60
+- "self" - Self-employment tax, UTR number, freelancer tax
+- "company" - Company accounting, VAT, payroll, limited company services
+- "general" - General inquiry or unclear
+
+Respond with ONLY the service slug (student, paye, self, company, or general).
+"""
+    
+    messages = [{'role': 'system', 'content': system_prompt}]
+    
+    # Add conversation context if available
+    if conversation_history:
+        for msg in conversation_history[-5:]:  # Last 5 messages for context
+            content = msg.get('content', '')
+            if content and not content.startswith('[FILE:'):
+                messages.append({
+                    'role': msg.get('role', 'user'),
+                    'content': content[:200]  # Truncate long messages
+                })
+    
+    messages.append({'role': 'user', 'content': f"Classify this message: {text}"})
+    
+    try:
+        start_time = time.time()
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=messages,
+            max_tokens=20,
+            temperature=0.1
+        )
+        response_time = time.time() - start_time
+        _track_usage(response.usage.total_tokens if response.usage else 0, response_time=response_time)
+        
+        result = response.choices[0].message.content.strip().lower()
+        
+        # Validate response
+        valid_services = ['student', 'paye', 'self', 'company', 'general']
+        if result in valid_services:
+            logger.info(f"AI detected service: {result} for text: {text[:50]}...")
+            return result if result != 'general' else None
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"AI service detection error: {e}")
+        _track_usage(error=True)
+        return None
+
+
+# ============== System Prompts ==============
+
+def build_system_prompt(service: str, lang: str = 'en') -> str:
+    """
+    Build the system prompt for AI based on service and language.
+    
+    Args:
+        service: Service slug
+        lang: Language code
+        
+    Returns:
+        Complete system prompt string
+    """
+    from core.models import ServiceDefinition
+    
+    lang_map = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}
+    target_lang = lang_map.get(lang, 'English')
+    
+    # Try to get service definition from database
+    svc_def = None
+    try:
+        svc_def = ServiceDefinition.objects.filter(slug=service, is_active=True).first()
+    except Exception as e:
+        logger.error(f"Error loading service definition: {e}")
+    
+    if svc_def and svc_def.ai_system_prompt:
+        # Use custom AI system prompt from database
+        if svc_def.ai_strict_flow:
+            # Strict flow - use prompt as-is
+            base_prompt = svc_def.ai_system_prompt
+        else:
+            # Flexible flow - append collect items and documents
+            base_prompt = svc_def.ai_system_prompt
+            
+            collect_items = svc_def.get_collect_items()
+            if collect_items:
+                base_prompt += f"\n\nInformation to collect:\n" + "\n".join(f"- {item}" for item in collect_items)
+            
+            documents = svc_def.get_documents_list()
+            if documents:
+                base_prompt += f"\n\nDocuments to request:\n" + "\n".join(f"- {doc}" for doc in documents)
+    else:
+        # Fallback to hardcoded prompts
+        base_prompt = _build_hardcoded_prompt(service)
+    
+    # Append collect-then-assign behavior (for non-general services) and common rules
+    if service and service != 'general':
+        base_prompt = base_prompt.rstrip() + "\n\n" + COLLECT_AND_ASSIGN_BEHAVIOR
+    # Append common rules
+    full_prompt = f"""{base_prompt}
+
+{TONE_RULES}
+
+{ANTI_BOT_PATTERNS}
+
+{STYLE_EXAMPLES}
+
+IMPORTANT: Reply ONLY in {target_lang}. Do not switch languages unless the user explicitly asks.
+
+When the user has just sent a file (photo, document, voice, video), you may suggest a short filename so we can label it. If you can infer what the file is (e.g. passport, id_front, receipt, p60), end your message with a line: FILENAME: label (e.g. FILENAME: passport or FILENAME: id_front). Use one or two words, no path and no extension. If unsure, omit this line.
+"""
+    
+    return full_prompt
+
+
+def _build_hardcoded_prompt(service: str) -> str:
+    """Build prompt from hardcoded service info."""
+    
+    if service == 'student':
+        return """You are an AI assistant helping with Student Visa and University applications for the UK.
+
+Your job is to collect the following information from the user:
+- Full name (as in passport)
+- Passport number
+- Date of birth
+- University name and course
+- CAS number (if available)
+- Previous UK visa history
+
+Request these documents:
+- Passport scan (photo page)
+- University acceptance letter
+- Financial documents (bank statements)
+- English test results (IELTS/TOEFL)
+
+Guide them step by step, asking for one piece of information at a time."""
+
+    elif service == 'paye':
+        return """You are an AI assistant helping with PAYE Tax Refund claims in the UK.
+
+Follow this STRICT step-by-step flow:
+
+STEP 1: Get their full name and National Insurance number
+STEP 2: Ask which tax years they want to claim (last 4 years possible)
+STEP 3: Get their employer details (name, dates worked)
+STEP 4: Request P45 or P60 documents
+STEP 5: Check if they have payslips
+STEP 6: Get their current address
+STEP 7: Confirm all details and explain next steps
+
+Only move to the next step after completing the current one.
+Be clear about what documents they need to provide."""
+
+    elif service == 'self':
+        return """You are an AI assistant helping with Self Assessment Tax Returns in the UK.
+
+Collect the following information:
+- Full name and UTR number
+- Tax year for the return
+- Sources of income (self-employment, rental, dividends, etc.)
+- Business expenses to claim
+- Previous tax returns submitted
+
+Request these documents:
+- Bank statements for the tax year
+- Income records/invoices
+- Expense receipts
+- Previous tax return (if available)
+
+Guide them through the information collection process."""
+
+    elif service == 'company':
+        return """You are an AI assistant helping with Company Accounting services in the UK.
+
+Collect the following information:
+- Company name and registration number
+- Director details
+- Financial year end date
+- VAT registration status
+- Payroll requirements
+
+Request these documents:
+- Certificate of incorporation
+- Bank statements
+- Sales invoices
+- Purchase receipts
+- Payroll records (if applicable)
+
+Understand their accounting needs and guide them accordingly."""
+
+    else:
+        return GENERAL_SYSTEM_PROMPT
+
+
+# ============== AI Chat Functions ==============
+
+def get_ai_response(message: str, conversation_history: list = None, service: str = None, lang: str = 'en', max_tokens: int = 800) -> str:
+    """
+    Get AI response for a user message.
+    
+    Args:
+        message: User's message text
+        conversation_history: List of previous messages
+        service: Service slug for context
+        lang: Language code
+        max_tokens: Maximum response tokens
+        
+    Returns:
+        AI response text or None on error
+    """
+    if not _check_rate_limit():
+        logger.warning("Rate limit exceeded for AI calls")
+        return None
+    
+    client = get_openai_client()
+    if not client:
+        return None
+    
+    # Build system prompt
+    system_prompt = build_system_prompt(service or 'general', lang)
+    
+    # Prepare messages
+    messages = [{'role': 'system', 'content': system_prompt}]
+    
+    # Add conversation history (limited to last 20 messages)
+    if conversation_history:
+        for msg in conversation_history[-20:]:
+            role = msg.get('role', 'user')
+            # Map non-standard roles to assistant
+            if role not in ['user', 'assistant', 'system']:
+                role = 'assistant'
+            content = msg.get('content', '')
+            if content:
+                messages.append({'role': role, 'content': content})
+    
+    # Add current message if not already in history
+    if message and (not conversation_history or conversation_history[-1].get('content') != message):
+        messages.append({'role': 'user', 'content': message})
+    
+    try:
+        start_time = time.time()
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0.3,
+            timeout=30
+        )
+        response_time = time.time() - start_time
+        
+        tokens = response.usage.total_tokens if response.usage else 0
+        _track_usage(tokens, response_time=response_time)
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        logger.error(f"OpenAI API error: {e}")
+        _track_usage(error=True)
+        return None
+
+
+def ask_ai(conversation: list, service: str, lang: str = 'en', max_tokens: int = 800) -> str:
+    """
+    Call OpenAI API to get AI response.
+    Legacy function - wraps get_ai_response for backwards compatibility.
+    
+    Args:
+        conversation: List of conversation messages
+        service: Service slug
+        lang: Language code
+        max_tokens: Maximum response tokens
+        
+    Returns:
+        AI response text or None on error
+    """
+    # Get the last user message
+    last_message = None
+    for msg in reversed(conversation):
+        if msg.get('role') == 'user':
+            last_message = msg.get('content', '')
+            break
+    
+    return get_ai_response(
+        message=last_message or '',
+        conversation_history=conversation[:-1] if conversation else None,
+        service=service,
+        lang=lang,
+        max_tokens=max_tokens
+    )
+
+
+# ============== Voice Transcription ==============
+
+def convert_audio(input_path: str, output_path: str = None) -> str:
+    """
+    Convert audio file to WAV format using ffmpeg.
+    
+    Args:
+        input_path: Path to input audio file
+        output_path: Optional path for output file (auto-generated if None)
+        
+    Returns:
+        Path to converted file or None on error
+    """
+    input_path = Path(input_path)
+    
+    if not input_path.exists():
+        logger.error(f"Audio file not found: {input_path}")
+        return None
+    
+    if output_path is None:
+        output_path = input_path.with_suffix('.wav')
+    else:
+        output_path = Path(output_path)
+    
+    try:
+        # Run ffmpeg to convert audio
+        cmd = [
+            'ffmpeg', '-y',  # Overwrite output
+            '-i', str(input_path),
+            '-acodec', 'pcm_s16le',  # PCM 16-bit
+            '-ar', '16000',  # 16kHz sample rate
+            '-ac', '1',  # Mono
+            str(output_path)
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"ffmpeg error: {result.stderr.decode()}")
+            return None
+        
+        if output_path.exists():
+            logger.info(f"Audio converted: {input_path} -> {output_path}")
+            return str(output_path)
+        
+        return None
+        
+    except subprocess.TimeoutExpired:
+        logger.error("ffmpeg conversion timeout")
+        return None
+    except FileNotFoundError:
+        logger.error("ffmpeg not found - please install ffmpeg")
+        return None
+    except Exception as e:
+        logger.error(f"Audio conversion error: {e}")
+        return None
+
+
+def transcribe_voice(file_path: str, language_hint: str = None) -> str:
+    """
+    Transcribe voice/audio file using OpenAI Whisper-1.
+    
+    Args:
+        file_path: Path to audio file
+        language_hint: Optional language hint (ISO 639-1 code)
+        
+    Returns:
+        Transcribed text or None on error
+    """
+    client = get_openai_client()
+    if not client:
+        return None
+    
+    file_path = Path(file_path)
+    if not file_path.exists():
+        logger.error(f"Audio file not found: {file_path}")
+        return None
+    
+    # Whisper-1 supported formats
+    supported_formats = {'.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'}
+    file_ext = file_path.suffix.lower()
+    
+    # Convert if needed
+    temp_file = None
+    if file_ext in {'.ogg', '.oga', '.opus'}:
+        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        temp_file.close()
+        converted_path = convert_audio(str(file_path), temp_file.name)
+        if not converted_path:
+            logger.error(f"Failed to convert {file_ext} to WAV")
+            return None
+        file_path = Path(converted_path)
+    elif file_ext not in supported_formats:
+        logger.error(f"Unsupported audio format: {file_ext}")
+        return None
+    
+    try:
+        start_time = time.time()
+        
+        # Prepare API call
+        with open(file_path, 'rb') as audio_file:
+            kwargs = {
+                'model': 'whisper-1',
+                'file': audio_file,
+            }
+            
+            # Add language hint if provided
+            if language_hint:
+                # Map our codes to Whisper codes
+                lang_map = {
+                    'en': 'en',
+                    'ru': 'ru',
+                    'uz': 'uz',
+                }
+                whisper_lang = lang_map.get(language_hint[:2].lower())
+                if whisper_lang:
+                    kwargs['language'] = whisper_lang
+            
+            response = client.audio.transcriptions.create(**kwargs)
+        
+        response_time = time.time() - start_time
+        _track_usage(response_time=response_time)
+        
+        transcription = response.text if hasattr(response, 'text') else str(response)
+        logger.info(f"Transcribed audio ({response_time:.2f}s): {transcription[:50]}...")
+        
+        return transcription
+        
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        _track_usage(error=True)
+        return None
+    
+    finally:
+        # Clean up temp file
+        if temp_file and Path(temp_file.name).exists():
+            try:
+                os.unlink(temp_file.name)
+            except:
+                pass
+
+
+def transcribe_document(doc_id: int) -> str:
+    """
+    Transcribe a voice document from the database.
+    
+    Args:
+        doc_id: Document database ID
+        
+    Returns:
+        Transcribed text or None on error
+    """
+    from core.models import Document
+    
+    try:
+        doc = Document.objects.get(pk=doc_id)
+    except Document.DoesNotExist:
+        logger.error(f"Document {doc_id} not found")
+        return None
+    
+    # Get file path
+    file_id = doc.telegram_file_id
+    if file_id.startswith('local:'):
+        filename = file_id[6:]  # Remove "local:" prefix
+        file_path = UPLOADS_DIR / filename
+    else:
+        # Remote file - would need to download first
+        logger.error("Remote file transcription not implemented yet")
+        return None
+    
+    # Get language hint from user
+    language_hint = None
+    if doc.case and doc.case.user:
+        language_hint = doc.case.user.language_code
+    
+    # Transcribe
+    text = transcribe_voice(str(file_path), language_hint)
+    
+    if text:
+        # Save transcription to document
+        doc.transcription = text
+        doc.save(update_fields=['transcription'])
+    
+    return text
+
+
+# ============== Document Naming ==============
+
+def suggest_document_name(conversation: list, media_type: str, user_telegram_id: int, ext: str = '') -> str:
+    """
+    Use AI to suggest a short filename label for an uploaded file from conversation context.
+    Returns a label like "birth_certificate" or "passport" (no extension), or empty on failure.
+    """
+    client = get_openai_client()
+    if not client or not conversation:
+        return ''
+    conv_text = "\n".join([
+        f"{m.get('role', 'user')}: {(m.get('content') or '')[:200]}"
+        for m in conversation[-15:]
+        if m.get('content') and not (m.get('content') or '').strip().startswith('[FILE:')
+    ])
+    if not conv_text.strip():
+        return ''
+    prompt = f"""The user just sent a {media_type} file. From the conversation, what document did they say they are sending?
+Reply with ONLY a short snake_case label (e.g. birth_certificate, passport, id_front, receipt, p60, bank_statement). No path, no extension, no other text. Use exactly what the user said they would send. If you cannot tell, reply: unknown
+Conversation:
+{conv_text[:1500]}"""
+    try:
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=25,
+            temperature=0.2
+        )
+        raw = (response.choices[0].message.content or '').strip().split('\n')[0].strip()
+        label = re.sub(r'[^\w\-]', '_', raw)[:50].strip('_').lower().replace(' ', '_')
+        return label if label and label != 'unknown' else ''
+    except Exception as e:
+        logger.debug(f"Suggest document name error: {e}")
+        return ''
+
+
+def parse_filename_from_response(response_text: str):
+    """
+    If the AI ended with a line FILENAME: label, return (response_without_that_line, label).
+    Otherwise return (response_text, None).
+    """
+    if not response_text or 'FILENAME:' not in response_text:
+        return (response_text, None)
+    lines = response_text.strip().split('\n')
+    out_lines = []
+    label = None
+    for line in lines:
+        s = line.strip()
+        if s.upper().startswith('FILENAME:'):
+            label = s[9:].strip()
+            label = re.sub(r'[^\w\-]', '_', label)[:50].strip('_')
+            continue
+        out_lines.append(line)
+    cleaned = '\n'.join(out_lines).strip()
+    return (cleaned, label or None)
+
+
+# ============== Profile Extraction ==============
+
+def extract_profile_info(conversation_history: list) -> dict:
+    """
+    Extract user profile information from conversation history using AI.
+    
+    Args:
+        conversation_history: List of conversation messages
+        
+    Returns:
+        Dictionary with extracted profile data
+    """
+    client = get_openai_client()
+    if not client:
+        return {}
+    
+    if not conversation_history:
+        return {}
+    
+    # Build conversation text
+    conv_text = "\n".join([
+        f"{msg.get('role', 'user')}: {msg.get('content', '')}"
+        for msg in conversation_history[-80:]  # Last 80 messages
+        if msg.get('content') and not msg.get('content', '').startswith('[FILE:')
+    ])
+    
+    if not conv_text:
+        return {}
+    
+    system_prompt = """Analyze this conversation and extract any useful information about the user that would help a consultant (demographics, contact, immigration, employment, preferences, situation, etc.).
+
+Return ONLY a valid JSON object with two keys:
+1) "extracted": an object with snake_case keys and values (e.g. gender, age, full_name, nationality, email, phone, occupation, visa_status, country_of_residence, service_interest, budget, urgency). Include only keys for which you found clear information. Omit keys with null or unknown values.
+2) "pinned": an array of 1 to 5 objects, each with "label" and "value". Pick the most important facts for a consultant to see at a glance (e.g. visa status, service need, urgency, gender, key constraint). Use short human-readable labels (e.g. "Visa status", "Service", "Urgency"). Example: [{"label": "Visa status", "value": "Student"}, {"label": "Urgency", "value": "By September"}].
+
+Extraction examples (not a fixed list): full_name, gender, age, nationality, email, phone, occupation, visa_status, country_of_residence, service_interest, budget, urgency, family_status, education, employer, notes. Normalize values to be short and readable. Be conservative: only include information that is clearly stated or strongly implied. Do not make up or guess."""
+    
+    try:
+        start_time = time.time()
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': conv_text}
+            ],
+            max_tokens=800,
+            temperature=0.1
+        )
+        response_time = time.time() - start_time
+        tokens = response.usage.total_tokens if response.usage else 0
+        _track_usage(tokens, response_time=response_time)
+        
+        response_text = response.choices[0].message.content
+        
+        # Try to parse JSON from response
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0]
+        elif '```' in response_text:
+            response_text = response_text.split('```')[1].split('```')[0]
+        
+        data = json.loads(response_text.strip())
+        # Support both new format {extracted, pinned} and legacy flat object
+        if isinstance(data, dict) and 'extracted' in data:
+            return data
+        if isinstance(data, dict):
+            return {'extracted': data, 'pinned': []}
+        return {'extracted': {}, 'pinned': []}
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Profile extraction JSON error: {e}")
+        return {'extracted': {}, 'pinned': []}
+    except Exception as e:
+        logger.error(f"Profile extraction error: {e}")
+        _track_usage(error=True)
+        return {'extracted': {}, 'pinned': []}
+
+
+def update_user_profile(user_db_id: int, force: bool = False) -> dict:
+    """
+    Update user's AI profile from their conversation history.
+    
+    Args:
+        user_db_id: TgUser database ID
+        force: Force update even if recently updated
+        
+    Returns:
+        Updated profile data dictionary
+    """
+    from core.models import TgUser, Case, UserAiProfile
+    from datetime import datetime, timedelta
+    
+    try:
+        user = TgUser.objects.get(pk=user_db_id)
+    except TgUser.DoesNotExist:
+        return {}
+    
+    # Check if we should update
+    ai_profile, created = UserAiProfile.objects.get_or_create(user=user)
+    
+    if not force and not created and ai_profile.updated_at:
+        # Throttle: skip if updated in the last 2 minutes (analyze after every message, but limit API calls)
+        elapsed = (datetime.now() - ai_profile.updated_at).total_seconds()
+        if elapsed < 120:
+            try:
+                return json.loads(ai_profile.extracted_data or '{}')
+            except Exception:
+                pass
+    
+    # Collect all conversation messages
+    all_messages = []
+    for case in user.cases.all():
+        conv = case.get_conversation()
+        all_messages.extend(conv)
+    
+    if not all_messages:
+        return {}
+    
+    # Extract profile info (returns {extracted: {...}, pinned: [...]})
+    result = extract_profile_info(all_messages)
+    new_data = result.get('extracted') or {}
+    new_pinned = result.get('pinned') or []
+    
+    if new_data or new_pinned:
+        try:
+            existing_data = json.loads(ai_profile.extracted_data or '{}')
+        except Exception:
+            existing_data = {}
+        
+        for key, value in new_data.items():
+            if value is not None and (not isinstance(value, str) or value.strip()):
+                existing_data[key] = value if not isinstance(value, str) else value.strip()
+        
+        ai_profile.extracted_data = json.dumps(existing_data)
+        # Save pinned: replace with AI-selected pinned items (only valid entries)
+        pinned_list = []
+        for item in new_pinned:
+            if isinstance(item, dict) and item.get('label') and item.get('value'):
+                pinned_list.append({
+                    'label': str(item['label']).strip(),
+                    'value': str(item['value']).strip()
+                })
+        ai_profile.pinned_data = json.dumps(pinned_list[:10])  # cap at 10
+        ai_profile.save()
+        
+        user.set_profile_data(existing_data)
+        
+        logger.info(f"Updated AI profile for user {user_db_id}")
+        return existing_data
+    
+    return {}
+
+
+def extract_user_profile(user_db_id: int) -> dict:
+    """
+    Extract user profile information from conversation history using AI.
+    Legacy function - wraps update_user_profile for backwards compatibility.
+    
+    Args:
+        user_db_id: TgUser database ID
+        
+    Returns:
+        Dictionary with extracted profile data
+    """
+    return update_user_profile(user_db_id, force=True)
+
+
+# ============== Report AI Conclusions ==============
+
+def generate_ai_conclusions(report_data: dict, report_type: str = 'general') -> str:
+    """
+    Generate AI-driven business insights for a report.
+    
+    Args:
+        report_data: Dictionary with report statistics
+        report_type: Type of report (daily, weekly, monthly, quarterly)
+        
+    Returns:
+        AI-generated conclusions text
+    """
+    client = get_openai_client()
+    if not client:
+        return _generate_template_conclusion(report_data, report_type)
+    
+    # Build analysis prompt
+    prompt = f"""Analyze the following business statistics for Brightway Consulting, a UK-based firm that handles tax and immigration services.
+
+Report Type: {report_type.capitalize()}
+Period: {report_data.get('period_start', 'N/A')} to {report_data.get('period_end', 'N/A')}
+
+Statistics:
+- New Users: {report_data.get('new_users', 0)}
+- New Cases: {report_data.get('new_cases', 0)}
+- Completed Cases: {report_data.get('completed_cases', 0)}
+- Active Cases: {report_data.get('active_cases', 0)}
+- Paid Cases: {report_data.get('paid_cases', 0)}
+- Total Revenue: £{report_data.get('total_revenue', 0):.2f}
+- Documents Uploaded: {report_data.get('docs_uploaded', 0)}
+
+Cases by Service:
+{json.dumps(report_data.get('by_service', {}), indent=2)}
+
+Cases by Status:
+{json.dumps(report_data.get('by_status', {}), indent=2)}
+
+Please provide a 2-3 paragraph business analysis including:
+1. Key performance highlights and notable trends
+2. Areas of strength and potential concerns
+3. Actionable recommendations for improvement
+
+Be specific with numbers and percentages where relevant.
+Keep the tone professional and constructive."""
+
+    try:
+        start_time = time.time()
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {
+                    'role': 'system',
+                    'content': 'You are a business analyst providing insights for a UK consulting firm specializing in tax and immigration services. Be concise, specific, and actionable.'
+                },
+                {'role': 'user', 'content': prompt}
+            ],
+            max_tokens=600,
+            temperature=0.7
+        )
+        response_time = time.time() - start_time
+        tokens = response.usage.total_tokens if response.usage else 0
+        _track_usage(tokens, response_time=response_time)
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        logger.error(f"AI conclusions generation error: {e}")
+        _track_usage(error=True)
+        return _generate_template_conclusion(report_data, report_type) + f"\n\n*(AI analysis unavailable)*"
+
+
+def _generate_template_conclusion(report_data: dict, report_type: str) -> str:
+    """Generate a template conclusion when AI is unavailable."""
+    return f"""## {report_type.capitalize()} Business Summary
+
+**Performance Overview:**
+During this period, we registered {report_data.get('new_users', 0)} new users and opened {report_data.get('new_cases', 0)} new cases. The team completed {report_data.get('completed_cases', 0)} cases, with {report_data.get('active_cases', 0)} currently active.
+
+**Financial Highlights:**
+We recorded {report_data.get('paid_cases', 0)} paid cases with total revenue of £{report_data.get('total_revenue', 0):.2f}. Document processing remained steady with {report_data.get('docs_uploaded', 0)} files uploaded.
+
+**Recommendations:**
+Continue monitoring case completion rates and follow up on pending payments to optimize cash flow."""
+
+
+# ============== Service Steps ==============
+
+def get_service_steps(service: str) -> list:
+    """
+    Get the steps for a service workflow.
+    
+    Args:
+        service: Service slug
+        
+    Returns:
+        List of ServiceStep objects
+    """
+    from core.models import ServiceDefinition, ServiceStep
+    
+    try:
+        svc_def = ServiceDefinition.objects.filter(slug=service, is_active=True).first()
+        if svc_def:
+            return list(svc_def.steps.all().order_by('step_number'))
+    except Exception as e:
+        logger.error(f"Error loading service steps: {e}")
+    
+    return []
+
+
+# ============== Test AI Prompt ==============
+
+def test_ai_prompt(system_prompt: str, user_message: str) -> str:
+    """
+    Test an AI system prompt with a sample user message.
+    Used by the services management page.
+    
+    Args:
+        system_prompt: The system prompt to test
+        user_message: Sample user message
+        
+    Returns:
+        AI response or error message
+    """
+    client = get_openai_client()
+    if not client:
+        return "Error: OpenAI API key not configured"
+    
+    try:
+        start_time = time.time()
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_message}
+            ],
+            max_tokens=500,
+            temperature=0.3,
+            timeout=30
+        )
+        response_time = time.time() - start_time
+        tokens = response.usage.total_tokens if response.usage else 0
+        _track_usage(tokens, response_time=response_time)
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        logger.error(f"Test prompt error: {e}")
+        _track_usage(error=True)
+        return f"Error: {str(e)}"
+
+
+# ============== Cache Management ==============
+
+def invalidate_service_cache():
+    """Force refresh of service cache on next access."""
+    _service_cache['timestamp'] = 0
+
+
+# ============== Conversation Management Helpers ==============
+
+def should_update_profile(message_count: int) -> bool:
+    """Check if we should trigger profile extraction (after every user message; throttled inside update_user_profile)."""
+    return message_count > 0
+
+
+def get_fallback_response(lang: str = 'en') -> str:
+    """Get a fallback response when AI fails."""
+    fallbacks = {
+        'en': "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment, or contact us directly through our website.",
+        'ru': "Извините, у меня возникли проблемы с обработкой вашего запроса. Пожалуйста, попробуйте снова через минуту или свяжитесь с нами напрямую через наш сайт.",
+        'uz': "Kechirasiz, so'rovingizni qayta ishlashda muammo yuz berdi. Iltimos, bir daqiqadan keyin qayta urinib ko'ring yoki veb-saytimiz orqali biz bilan bog'laning."
+    }
+    return fallbacks.get(lang, fallbacks['en'])

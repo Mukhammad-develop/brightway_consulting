@@ -1,0 +1,37 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Django
+*.log
+db.sqlite3
+media/
+staticfiles/
+.env
+.env.local
+*.local
+
+# Uploads and sessions (sensitive / generated)
+uploads/*
+!uploads/.gitkeep
+sessions/
+*.session
+*.session-journal
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*~
+
+# Bot
+bot.log
+userbot.log

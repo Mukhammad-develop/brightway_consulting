@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Our Services - Brightway Consulting</title>
+    <meta name="description" content="Comprehensive consulting services including student visas, tax refunds, self-assessment, and company accounting.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Scroll Progress Bar -->
+    <div class="scroll-progress"></div>
+
+    <!-- Navigation -->
+    <nav id="nav">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <span class="logo-icon">✦</span>
+                <span class="logo-text">Brightway</span>
+                <span class="logo-accent">Consulting</span>
+            </a>
+            
+            <div class="nav-links">
+                <a href="/" class="nav-link" data-i18n="nav_home">Home</a>
+                <a href="/services/" class="nav-link active" data-i18n="nav_services">Services</a>
+                <a href="/contact/" class="nav-link" data-i18n="nav_contact">Contact</a>
+            </div>
+            
+            <div class="nav-actions">
+                <div class="lang-switcher">
+                    <button class="lang-btn" id="langToggle">
+                        <span class="lang-flag" id="currentFlag">🇬🇧</span>
+                        <span class="lang-code" id="currentLang">EN</span>
+                        <svg class="lang-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="lang-dropdown" id="langDropdown">
+                        <button class="lang-option" data-lang="en" data-flag="🇬🇧">
+                            <span class="lang-flag">🇬🇧</span> English
+                        </button>
+                        <button class="lang-option" data-lang="ru" data-flag="🇷🇺">
+                            <span class="lang-flag">🇷🇺</span> Русский
+                        </button>
+                        <button class="lang-option" data-lang="uz" data-flag="🇺🇿">
+                            <span class="lang-flag">🇺🇿</span> O'zbek
+                        </button>
+                    </div>
+                </div>
+                
+                <a href="/admin/login" class="nav-admin-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </a>
+            </div>
+            
+            <button class="nav-mobile-toggle" id="mobileToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu -->
+    <div class="mobile-menu" id="mobileMenu">
+        <a href="/" class="mobile-link" data-i18n="nav_home">Home</a>
+        <a href="/services/" class="mobile-link" data-i18n="nav_services">Services</a>
+        <a href="/contact/" class="mobile-link" data-i18n="nav_contact">Contact</a>
+    </div>
+
+    <!-- Services Hero -->
+    <section class="services-hero">
+        <div class="hero-glow"></div>
+        <div class="hero-glow-2"></div>
+        
+        <div class="container">
+            <div class="services-hero-content" data-aos="fade-up">
+                <span class="section-label" data-i18n="services_label">Our Services</span>
+                <h1 class="hero-title" data-i18n="services_hero_title">Comprehensive Consulting Solutions</h1>
+                <p class="hero-subtitle" data-i18n="services_hero_desc">Expert guidance for all your UK tax and immigration needs. Choose the service that fits your situation.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Detailed Services -->
+    <section class="services-detailed">
+        <div class="container">
+            {% for service in services %}
+            <div class="service-detail-card" data-aos="fade-up" data-aos-delay="{{ forloop.counter0|add:100 }}">
+                <div class="service-detail-header">
+                    <div class="service-icon-large badge-{{ service.badge_color|default:service.slug }}">
+                        {{ service.icon_emoji }}
+                    </div>
+                    <div class="service-detail-title">
+                        <h2>{{ service.name }}</h2>
+                        <span class="service-badge badge-{{ service.badge_color|default:service.slug }}">{{ service.slug|upper }}</span>
+                    </div>
+                </div>
+                
+                <div class="service-detail-body">
+                    <p class="service-detail-desc">{{ service.description }}</p>
+                    
+                    <div class="service-features">
+                        {% if service.slug == 'student' %}
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>University application guidance</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Student visa (Tier 4) preparation</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Document verification and submission</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Interview preparation support</span>
+                        </div>
+                        {% elif service.slug == 'paye' %}
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>P45/P60 analysis and verification</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>HMRC refund claim submission</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Maximum refund calculation</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Direct deposit to your account</span>
+                        </div>
+                        {% elif service.slug == 'self' %}
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>UTR registration assistance</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Income and expense recording</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Tax return preparation and filing</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Tax optimization advice</span>
+                        </div>
+                        {% elif service.slug == 'company' %}
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Company formation and registration</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>VAT registration and returns</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Annual accounts preparation</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Payroll management</span>
+                        </div>
+                        {% else %}
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Professional consultation</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Document preparation</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Expert guidance</span>
+                        </div>
+                        <div class="service-feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Ongoing support</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="service-detail-footer">
+                    <a href="https://t.me/brightway_consulting_uk" target="_blank" class="btn btn-primary">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.89.03-.24.38-.49 1.05-.74 4.12-1.79 6.87-2.97 8.26-3.54 3.93-1.63 4.75-1.91 5.28-1.92.12 0 .38.03.55.17.14.12.18.28.2.45-.01.07-.01.13-.01.21z"/>
+                        </svg>
+                        <span data-i18n="get_started">Get Started</span>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-box" data-aos="zoom-in">
+                <div class="cta-glow"></div>
+                <div class="cta-content">
+                    <h2 data-i18n="cta_services_title">Not Sure Which Service You Need?</h2>
+                    <p data-i18n="cta_services_desc">Reach us via our Telegram channel and we'll help you find the right solution for your situation.</p>
+                    
+                    <a href="https://t.me/brightway_consulting_uk" target="_blank" class="btn btn-primary btn-large btn-glow">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.89.03-.24.38-.49 1.05-.74 4.12-1.79 6.87-2.97 8.26-3.54 3.93-1.63 4.75-1.91 5.28-1.92.12 0 .38.03.55.17.14.12.18.28.2.45-.01.07-.01.13-.01.21z"/>
+                        </svg>
+                        <span data-i18n="cta_button">Start Free Consultation</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="/" class="footer-logo">
+                        <span class="logo-icon">✦</span>
+                        <span class="logo-text">Brightway</span>
+                        <span class="logo-accent">Consulting</span>
+                    </a>
+                    <p data-i18n="footer_desc">Professional consulting services for tax, immigration, and business needs in the UK.</p>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_services">Services</h4>
+                    <a href="/services/">Student Visa</a>
+                    <a href="/services/">PAYE Tax Refund</a>
+                    <a href="/services/">Self Assessment</a>
+                    <a href="/services/">Company Accounting</a>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_company">Company</h4>
+                    <a href="/" data-i18n="nav_home">Home</a>
+                    <a href="/services/" data-i18n="nav_services">Services</a>
+                    <a href="/contact/" data-i18n="nav_contact">Contact</a>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_contact">Contact</h4>
+                    <a href="mailto:info@brightwayconsulting.co.uk">info@brightwayconsulting.co.uk</a>
+                    <a href="tel:+447000000000">+44 (0) 700 000 0000</a>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>© 2024 Brightway Consulting. <span data-i18n="footer_rights">All rights reserved.</span></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

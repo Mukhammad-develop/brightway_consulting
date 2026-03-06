@@ -1,0 +1,81 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:team_list' %}" class="btn btn-outline">← Back to Team</a>
+{% endblock %}
+
+{% block content %}
+<div class="assignments-container">
+    <div class="assignments-grid">
+        <!-- Current Assignments -->
+        <div class="panel-card">
+            <div class="card-header">Current Assignments ({{ assignments|length }})</div>
+            <div class="card-body">
+                {% if assignments %}
+                <div class="assignments-list">
+                    {% for assignment in assignments %}
+                    <div class="assignment-row">
+                        <div class="user-info">
+                            <strong>{{ assignment.user }}</strong>
+                            <span class="user-id">ID: {{ assignment.user.telegram_id }}</span>
+                        </div>
+                        <div class="assignment-meta">
+                            <span>Since {{ assignment.assigned_at|date:"M d, Y" }}</span>
+                            <form method="post" style="display:inline;">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="remove">
+                                <input type="hidden" name="assignment_id" value="{{ assignment.pk }}">
+                                <button type="submit" class="btn btn-xs btn-danger">Remove</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p>No users assigned to {{ admin_user.display_name|default:admin_user.username }} yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Assign New User -->
+        <div class="panel-card">
+            <div class="card-header">Assign User</div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="assign">
+                    
+                    <div class="form-group">
+                        <label>Select User</label>
+                        <select name="user_id" class="form-select" required>
+                            <option value="">-- Select a user --</option>
+                            {% for user in unassigned_users %}
+                            <option value="{{ user.pk }}">{{ user }} (ID: {{ user.telegram_id }})</option>
+                            {% endfor %}
+                        </select>
+                        <small>Showing up to 50 most recent unassigned users</small>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Assign User</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.assignments-container { max-width: 900px; }
+.assignments-grid { display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem; }
+.assignments-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 500px; overflow-y: auto; }
+.assignment-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; }
+.user-info { display: flex; flex-direction: column; }
+.user-info strong { margin-bottom: 0.25rem; }
+.user-id { font-size: 0.8rem; color: var(--text-muted); }
+.assignment-meta { display: flex; align-items: center; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary); }
+@media (max-width: 800px) { .assignments-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}

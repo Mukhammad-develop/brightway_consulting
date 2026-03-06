@@ -1,0 +1,111 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}Users{% endblock %}
+{% block page_title_header %}Users{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:user_add' %}" class="btn btn-primary">+ Add User</a>
+{% endblock %}
+
+{% block content %}
+<div class="list-page">
+    <!-- Filters -->
+    <div class="filter-bar">
+        <form method="get" class="filter-form">
+            <div class="filter-group">
+                <input type="text" name="search" value="{{ search_query }}" placeholder="Search by name, username, phone..." class="form-input search-input">
+            </div>
+            <div class="filter-group">
+                <select name="language" class="form-select">
+                    <option value="">All Languages</option>
+                    {% for lang in languages %}
+                    <option value="{{ lang }}" {% if language_filter == lang %}selected{% endif %}>
+                        {% if lang == 'en' %}🇬🇧 English{% elif lang == 'ru' %}🇷🇺 Russian{% elif lang == 'uz' %}🇺🇿 Uzbek{% else %}{{ lang|upper }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <select name="sort" class="form-select">
+                    <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Newest First</option>
+                    <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Oldest First</option>
+                    <option value="username" {% if sort_by == 'username' %}selected{% endif %}>Username A-Z</option>
+                    <option value="-username" {% if sort_by == '-username' %}selected{% endif %}>Username Z-A</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-outline">Filter</button>
+            {% if search_query or language_filter %}
+            <a href="{% url 'panel:users_list' %}" class="btn btn-text">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    
+    <!-- Results Info -->
+    <div class="results-info">
+        <span>{{ total_count }} user{{ total_count|pluralize }}</span>
+    </div>
+    
+    <!-- Users Table -->
+    <div class="panel-card">
+        <div class="card-body no-padding">
+            {% if page_obj %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Username</th>
+                        <th>Phone</th>
+                        <th>Language</th>
+                        <th>Cases</th>
+                        <th>Files</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in page_obj %}
+                    <tr>
+                        <td><span class="mono">{{ user.telegram_id }}</span></td>
+                        <td>{{ user.first_name|default:"" }} {{ user.last_name|default:"" }}{% if not user.first_name and not user.last_name %}<span class="muted">-</span>{% endif %}</td>
+                        <td>{% if user.username %}<span class="username">@{{ user.username }}</span>{% else %}<span class="muted">-</span>{% endif %}</td>
+                        <td>{{ user.phone|default:"-" }}</td>
+                        <td>
+                            {% if user.language_code == 'en' %}🇬🇧{% elif user.language_code == 'ru' %}🇷🇺{% elif user.language_code == 'uz' %}🇺🇿{% else %}🌐{% endif %}
+                        </td>
+                        <td>{{ user.cases_count }}</td>
+                        <td>{{ user.docs_count }}</td>
+                        <td>{{ user.created_at|date:"M d, Y" }}</td>
+                        <td class="actions">
+                            <a href="{% url 'panel:user_detail' user.pk %}" class="btn btn-xs" title="View">View</a>
+                            <a href="{% url 'panel:user_edit' user.pk %}" class="btn btn-xs btn-outline" title="Edit">Edit</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No users found</p>
+                <a href="{% url 'panel:user_add' %}" class="btn btn-primary">Add First User</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&language={{ language_filter }}&sort={{ sort_by }}" class="btn btn-sm btn-outline">&laquo; Previous</a>
+        {% endif %}
+        
+        <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&language={{ language_filter }}&sort={{ sort_by }}" class="btn btn-sm btn-outline">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

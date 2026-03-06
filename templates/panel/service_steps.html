@@ -1,0 +1,117 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:services_list' %}" class="btn btn-outline">← Back to Services</a>
+{% endblock %}
+
+{% block content %}
+<div class="steps-container">
+    <div class="panel-card">
+        <div class="card-header">
+            <span>Progress Steps for {{ service.name }}</span>
+        </div>
+        <div class="card-body">
+            {% if steps %}
+            <div class="steps-list">
+                {% for step in steps %}
+                <div class="step-row" data-step-id="{{ step.pk }}">
+                    <div class="step-order">{{ step.step_number }}</div>
+                    <div class="step-info">
+                        <strong>{{ step.label }}</strong>
+                        <span class="step-slug">{{ step.slug }}</span>
+                        {% if step.is_final %}<span class="badge badge-success">Final</span>{% endif %}
+                        {% if step.description %}<p class="step-desc">{{ step.description }}</p>{% endif %}
+                    </div>
+                    <div class="step-actions">
+                        <button class="btn btn-xs btn-outline" onclick="editStep({{ step.pk }})">Edit</button>
+                        <form method="post" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="step_id" value="{{ step.pk }}">
+                            <button type="submit" class="btn btn-xs btn-danger" onclick="return confirm('Delete this step?')">×</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>No steps defined for this service yet.</p>
+            </div>
+            {% endif %}
+            
+            <div class="add-step-form">
+                <h4>Add New Step</h4>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Label *</label>
+                            <input type="text" name="label" class="form-input" required placeholder="e.g., Documents Verified">
+                        </div>
+                        <div class="form-group">
+                            <label>Slug</label>
+                            <input type="text" name="slug" class="form-input" placeholder="auto-generated">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Title (display name)</label>
+                            <input type="text" name="title" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Title (Russian)</label>
+                            <input type="text" name="title_ru" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Title (Uzbek)</label>
+                            <input type="text" name="title_uz" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea name="description" class="form-textarea" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="is_required" checked>
+                                <span>Required Step</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="is_final">
+                                <span>Final Step (completion)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Add Step</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.steps-container { max-width: 800px; }
+.steps-list { margin-bottom: 2rem; }
+.step-row { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 0.5rem; }
+.step-order { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--primary-color); color: white; border-radius: 50%; font-weight: 600; }
+.step-info { flex: 1; }
+.step-info strong { display: block; }
+.step-slug { font-size: 0.8rem; color: var(--text-muted); }
+.step-desc { margin: 0.5rem 0 0 0; font-size: 0.85rem; color: var(--text-secondary); }
+.step-actions { display: flex; gap: 0.5rem; }
+.add-step-form { border-top: 1px solid var(--border-color); padding-top: 1.5rem; margin-top: 1rem; }
+.add-step-form h4 { margin: 0 0 1rem 0; }
+</style>
+{% endblock %}

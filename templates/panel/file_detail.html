@@ -1,0 +1,80 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}File: {{ document.file_path|default:"Document" }}{% endblock %}
+{% block page_title_header %}File Details{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:files_list' %}" class="btn btn-text">← Back to Files</a>
+{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="detail-grid">
+        <!-- File Info Card -->
+        <div class="panel-card profile-card">
+            <div class="card-body">
+                <div class="file-detail-header">
+                    <div class="file-icon-large">{{ document.icon }}</div>
+                    <div class="file-detail-info">
+                        <h2>{{ document.display_name|default:document.file_path|default:"Document" }}</h2>
+                        <p class="file-detail-meta">
+                            {{ document.file_type|default:"unknown"|upper }} file
+                            {% if document.uploaded_at %} &middot; Uploaded {{ document.uploaded_at|date:"F d, Y H:i" }}{% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="profile-details">
+                    <div class="detail-row detail-row-editable">
+                        <span class="detail-label">File name</span>
+                        <span class="detail-value">
+                            <form method="post" action="{% url 'panel:file_rename' document.pk %}" class="file-rename-form" style="display:inline-flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                                {% csrf_token %}
+                                <input type="text" name="display_name" class="form-input" style="max-width:280px;" value="{{ document.display_name|default:document.file_path|default:'' }}" placeholder="e.g. passport_12345.jpg">
+                                <button type="submit" class="btn btn-sm btn-outline">Save</button>
+                            </form>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Case</span>
+                        <span class="detail-value">
+                            <a href="{% url 'panel:case_detail' document.case.pk %}">Case #{{ document.case.pk }}</a>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">User</span>
+                        <span class="detail-value">
+                            <a href="{% url 'panel:user_detail' document.case.user.pk %}">{{ document.case.user.username|default:document.case.user.telegram_id }}</a>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Media Type</span>
+                        <span class="detail-value">{{ document.media_type|title }}</span>
+                    </div>
+                    {% if document.description %}
+                    <div class="detail-row">
+                        <span class="detail-label">Description</span>
+                        <span class="detail-value">{{ document.description }}</span>
+                    </div>
+                    {% endif %}
+                    {% if document.transcription %}
+                    <div class="detail-row">
+                        <span class="detail-label">Transcription</span>
+                        <span class="detail-value">{{ document.transcription }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="file-actions">
+                    {% if file_exists %}
+                    <a href="{% url 'panel:file_view' document.pk %}" class="btn btn-outline" target="_blank">View File</a>
+                    <a href="{% url 'panel:file_view' document.pk %}?download=1" class="btn btn-primary">Download</a>
+                    {% else %}
+                    <span class="text-muted">File not available locally</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

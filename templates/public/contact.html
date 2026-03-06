@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us - Brightway Consulting</title>
+    <meta name="description" content="Get in touch with Brightway Consulting for expert tax and immigration assistance.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Scroll Progress Bar -->
+    <div class="scroll-progress"></div>
+
+    <!-- Navigation -->
+    <nav id="nav">
+        <div class="nav-container">
+            <a href="/" class="nav-logo">
+                <span class="logo-icon">✦</span>
+                <span class="logo-text">Brightway</span>
+                <span class="logo-accent">Consulting</span>
+            </a>
+            
+            <div class="nav-links">
+                <a href="/" class="nav-link" data-i18n="nav_home">Home</a>
+                <a href="/services/" class="nav-link" data-i18n="nav_services">Services</a>
+                <a href="/contact/" class="nav-link active" data-i18n="nav_contact">Contact</a>
+            </div>
+            
+            <div class="nav-actions">
+                <div class="lang-switcher">
+                    <button class="lang-btn" id="langToggle">
+                        <span class="lang-flag" id="currentFlag">🇬🇧</span>
+                        <span class="lang-code" id="currentLang">EN</span>
+                        <svg class="lang-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="lang-dropdown" id="langDropdown">
+                        <button class="lang-option" data-lang="en" data-flag="🇬🇧">
+                            <span class="lang-flag">🇬🇧</span> English
+                        </button>
+                        <button class="lang-option" data-lang="ru" data-flag="🇷🇺">
+                            <span class="lang-flag">🇷🇺</span> Русский
+                        </button>
+                        <button class="lang-option" data-lang="uz" data-flag="🇺🇿">
+                            <span class="lang-flag">🇺🇿</span> O'zbek
+                        </button>
+                    </div>
+                </div>
+                
+                <a href="/admin/login" class="nav-admin-link">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                </a>
+            </div>
+            
+            <button class="nav-mobile-toggle" id="mobileToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Mobile Menu -->
+    <div class="mobile-menu" id="mobileMenu">
+        <a href="/" class="mobile-link" data-i18n="nav_home">Home</a>
+        <a href="/services/" class="mobile-link" data-i18n="nav_services">Services</a>
+        <a href="/contact/" class="mobile-link" data-i18n="nav_contact">Contact</a>
+    </div>
+
+    <!-- Contact Hero -->
+    <section class="contact-hero">
+        <div class="hero-glow"></div>
+        <div class="hero-glow-2"></div>
+        
+        <div class="container">
+            <div class="contact-hero-content" data-aos="fade-up">
+                <span class="section-label" data-i18n="contact_label">Get In Touch</span>
+                <h1 class="hero-title" data-i18n="contact_hero_title">We're Here to Help</h1>
+                <p class="hero-subtitle" data-i18n="contact_hero_desc">Have questions? Reach out through any of these channels and we'll get back to you promptly.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Methods -->
+    <section class="contact-methods">
+        <div class="container">
+            <div class="contact-grid">
+                <a href="https://t.me/brightway_consulting_uk" target="_blank" class="contact-card" data-aos="fade-up" data-aos-delay="0">
+                    <div class="contact-card-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.89.03-.24.38-.49 1.05-.74 4.12-1.79 6.87-2.97 8.26-3.54 3.93-1.63 4.75-1.91 5.28-1.92.12 0 .38.03.55.17.14.12.18.28.2.45-.01.07-.01.13-.01.21z"/>
+                        </svg>
+                    </div>
+                    <h3 data-i18n="contact_telegram">Telegram Channel</h3>
+                    <p data-i18n="contact_telegram_desc">Join our channel for updates and to get in touch</p>
+                    <span class="contact-link">brightway_consulting_uk →</span>
+                </a>
+                
+                <a href="mailto:info@brightwayconsulting.co.uk" class="contact-card" data-aos="fade-up" data-aos-delay="100">
+                    <div class="contact-card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                            <polyline points="22,6 12,13 2,6"/>
+                        </svg>
+                    </div>
+                    <h3 data-i18n="contact_email">Email</h3>
+                    <p data-i18n="contact_email_desc">Send us a detailed message</p>
+                    <span class="contact-link">info@brightwayconsulting.co.uk</span>
+                </a>
+                
+                <a href="tel:+447435604403" class="contact-card" data-aos="fade-up" data-aos-delay="200">
+                    <div class="contact-card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                        </svg>
+                    </div>
+                    <h3 data-i18n="contact_phone">Phone</h3>
+                    <p data-i18n="contact_phone_desc">Call us during business hours</p>
+                    <span class="contact-link">+44 7435 604403</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Form Section -->
+    <section class="contact-form-section">
+        <div class="container">
+            <div class="contact-form-grid">
+                <div class="contact-form-info" data-aos="fade-right">
+                    <h2 data-i18n="contact_form_title">Send Us a Message</h2>
+                    <p data-i18n="contact_form_desc">Fill out the form and our team will get back to you within 24 hours.</p>
+                    
+                    <div class="contact-info-card">
+                        <h4 data-i18n="contact_office">Our Office</h4>
+                        <p><strong>Brightway Consulting Limited</strong><br>Company number 14813206</p>
+                        <p>195 Wood Street,<br>London, England, E17 3NU</p>
+                        
+                        <h4 data-i18n="footer_contact">Contact</h4>
+                        <p><a href="mailto:info@brightwayconsulting.co.uk">info@brightwayconsulting.co.uk</a><br><a href="tel:+447435604403">+44 7435 604403</a></p>
+                        
+                        <h4 data-i18n="contact_hours">Business Hours</h4>
+                        <p>Monday - Friday: 9:00 AM - 6:00 PM<br>Saturday: 10:00 AM - 2:00 PM</p>
+                    </div>
+                </div>
+                
+                <div class="contact-form-wrapper" data-aos="fade-left">
+                    {% if form_submitted and form_success %}
+                    <div class="form-success">
+                        <div class="success-icon">✓</div>
+                        <h3 data-i18n="form_success_title">Message Sent!</h3>
+                        <p data-i18n="form_success_desc">Thank you for reaching out. We'll get back to you shortly.</p>
+                        <a href="/contact/" class="btn btn-secondary">Send Another Message</a>
+                    </div>
+                    {% else %}
+                    <form class="contact-form" method="POST" action="/contact/">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label for="name" data-i18n="form_name">Full Name</label>
+                            <input type="text" id="name" name="name" required placeholder="John Doe">
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="email" data-i18n="form_email">Email Address</label>
+                                <input type="email" id="email" name="email" required placeholder="john@example.com">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="phone" data-i18n="form_phone">Phone Number</label>
+                                <input type="tel" id="phone" name="phone" placeholder="+44 7000 000000">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="message" data-i18n="form_message">Your Message</label>
+                            <textarea id="message" name="message" rows="5" required placeholder="Tell us about your needs..."></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-full">
+                            <span data-i18n="form_submit">Send Message</span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq-section">
+        <div class="container">
+            <div class="feature-header" data-aos="fade-up">
+                <span class="section-label" data-i18n="faq_label">FAQ</span>
+                <h2 class="section-title" data-i18n="faq_title">Frequently Asked Questions</h2>
+            </div>
+            
+            <div class="faq-grid">
+                <div class="faq-item" data-aos="fade-up" data-aos-delay="0">
+                    <h4 data-i18n="faq_1_q">How quickly will I get a response?</h4>
+                    <p data-i18n="faq_1_a">We respond promptly. For complex inquiries, our consultants typically respond within 24 hours during business days.</p>
+                </div>
+                
+                <div class="faq-item" data-aos="fade-up" data-aos-delay="100">
+                    <h4 data-i18n="faq_2_q">What languages do you support?</h4>
+                    <p data-i18n="faq_2_a">We provide full support in English, Russian, and Uzbek.</p>
+                </div>
+                
+                <div class="faq-item" data-aos="fade-up" data-aos-delay="200">
+                    <h4 data-i18n="faq_3_q">Is my information secure?</h4>
+                    <p data-i18n="faq_3_a">Absolutely. We use encrypted channels and secure storage. Your documents and personal information are handled with the utmost confidentiality.</p>
+                </div>
+                
+                <div class="faq-item" data-aos="fade-up" data-aos-delay="300">
+                    <h4 data-i18n="faq_4_q">What are your fees?</h4>
+                    <p data-i18n="faq_4_a">Our fees vary depending on the service. Contact us via our channel to get a personalized quote for your specific needs.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-box" data-aos="zoom-in">
+                <div class="cta-glow"></div>
+                <div class="cta-content">
+                    <h2 data-i18n="cta_contact_title">Ready to Get Started?</h2>
+                    <p data-i18n="cta_contact_desc">The fastest way to get help is through our Telegram channel. It's available 24/7!</p>
+                    
+                    <a href="https://t.me/brightway_consulting_uk" target="_blank" class="btn btn-primary btn-large btn-glow">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.89.03-.24.38-.49 1.05-.74 4.12-1.79 6.87-2.97 8.26-3.54 3.93-1.63 4.75-1.91 5.28-1.92.12 0 .38.03.55.17.14.12.18.28.2.45-.01.07-.01.13-.01.21z"/>
+                        </svg>
+                        <span data-i18n="cta_button">Start Free Consultation</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="/" class="footer-logo">
+                        <span class="logo-icon">✦</span>
+                        <span class="logo-text">Brightway</span>
+                        <span class="logo-accent">Consulting</span>
+                    </a>
+                    <p class="footer-legal">Brightway Consulting Limited<br>Company number 14813206</p>
+                    <p data-i18n="footer_desc">Professional consulting services for tax, immigration, and business needs in the UK.</p>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_services">Services</h4>
+                    <a href="/services/">Student Visa</a>
+                    <a href="/services/">PAYE Tax Refund</a>
+                    <a href="/services/">Self Assessment</a>
+                    <a href="/services/">Company Accounting</a>
+                </div>
+                
+                <div class="footer-links">
+                    <h4>Location</h4>
+                    <address class="footer-address">
+                        195 Wood Street,<br>
+                        London,<br>
+                        England, E17 3NU
+                    </address>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_company">Company</h4>
+                    <a href="/" data-i18n="nav_home">Home</a>
+                    <a href="/services/" data-i18n="nav_services">Services</a>
+                    <a href="/contact/" data-i18n="nav_contact">Contact</a>
+                </div>
+                
+                <div class="footer-links">
+                    <h4 data-i18n="footer_contact">Contact</h4>
+                    <a href="mailto:info@brightwayconsulting.co.uk">info@brightwayconsulting.co.uk</a>
+                    <a href="tel:+447435604403">+44 7435 604403</a>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>© 2024 Brightway Consulting Limited. <span data-i18n="footer_rights">All rights reserved.</span></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

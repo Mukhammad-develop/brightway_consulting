@@ -1,0 +1,225 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}Case #{{ case.pk }}{% endblock %}
+{% block page_title_header %}Case #{{ case.pk }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:case_edit' case.pk %}" class="btn btn-outline">Edit Case</a>
+<a href="{% url 'panel:cases_list' %}" class="btn btn-text">← Back to Cases</a>
+{% endblock %}
+
+{% block content %}
+<div class="detail-page">
+    <div class="detail-grid case-detail-grid">
+        <!-- Main Content -->
+        <div class="detail-main">
+            <!-- Case Info Card -->
+            <div class="panel-card">
+                <div class="card-header">
+                    <h3>Case Information</h3>
+                    <span class="badge badge-{{ case.service }}">{{ service_display }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">User</span>
+                            <a href="{% url 'panel:user_detail' case.user.pk %}" class="info-value user-link">
+                                {{ case.user.username|default:case.user.telegram_id }}
+                            </a>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Status</span>
+                            <span class="info-value"><span class="status-badge status-{{ case.status }}">{{ case.get_status_display }}</span></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Payment Status</span>
+                            <span class="info-value"><span class="status-badge payment-{{ case.payment_status }}">{{ case.get_payment_status_display }}</span></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Total Amount</span>
+                            <span class="info-value">{{ case.currency }} {{ case.total_amount|floatformat:2 }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Paid Amount</span>
+                            <span class="info-value">{{ case.currency }} {{ case.paid_amount|floatformat:2 }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Created</span>
+                            <span class="info-value">{{ case.created_at|date:"F d, Y H:i" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Updated</span>
+                            <span class="info-value">{{ case.updated_at|date:"F d, Y H:i" }}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">AI in chat</span>
+                            <span class="info-value">
+                                <span class="ai-status" id="caseAiStatus">{% if case.ai_enabled %}On{% else %}Off{% endif %}</span>
+                                <button type="button" class="btn btn-sm btn-outline" id="caseAiToggleBtn" data-toggle-url="{% url 'panel:case_toggle_ai' case.pk %}">Toggle AI</button>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {% if case.notes %}
+                    <div class="notes-section">
+                        <h4>Notes</h4>
+                        <p>{{ case.notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Conversation History -->
+            <div class="panel-card">
+                <div class="card-header">
+                    <h3>Conversation History ({{ conversation|length }} messages)</h3>
+                </div>
+                <div class="card-body chat-wrap">
+                    {% if conversation %}
+                    <div class="chat-messages">
+                        {% for msg in conversation %}
+                        <div class="chat-msg {{ msg.role }}">
+                            {% if msg.file_info %}
+                            <div class="msg-bubble msg-file-bubble">
+                                <div class="chat-file-card">
+                                    <span class="chat-file-icon">{% if msg.file_media_type == 'photo' %}🖼️{% elif msg.file_media_type == 'voice' %}🎤{% elif msg.file_media_type == 'video' %}🎬{% else %}📄{% endif %}</span>
+                                    <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
+                                    <div class="chat-file-actions">
+                                        {% if msg.file_media_type == 'photo' or msg.file_media_type == 'voice' or msg.file_media_type == 'video' %}
+                                        <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">View</a>
+                                        {% endif %}
+                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="msg-bubble">{% if msg.content %}{{ msg.content }}{% else %}<em>—</em>{% endif %}</div>
+                            {% endif %}
+                            <div class="msg-meta">
+                                {{ msg.role|title }}
+                                {% if msg.sender %} &middot; {{ msg.sender }}{% endif %}
+                                {% if msg.timestamp %} &middot; {{ msg.timestamp }}{% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <p>No conversation history</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Documents -->
+            <div class="panel-card">
+                <div class="card-header">
+                    <h3>Documents ({{ documents|length }})</h3>
+                    <a href="{% url 'panel:file_upload' %}?case_id={{ case.pk }}" class="btn btn-sm btn-outline">+ Upload</a>
+                </div>
+                <div class="card-body">
+                    {% if documents %}
+                    <div class="files-grid">
+                        {% for doc in documents %}
+                        <div class="file-card">
+                            <div class="file-icon">📄</div>
+                            <div class="file-info">
+                                <div class="file-name">{{ doc.file_path|default:"Document" }}</div>
+                                <div class="file-meta">{{ doc.file_type|default:"unknown" }} · {{ doc.uploaded_at|date:"M d" }}</div>
+                            </div>
+                            <a href="{% url 'panel:file_detail' doc.pk %}" class="btn btn-xs">View</a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <p>No documents uploaded</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="detail-sidebar">
+            <!-- Quick Update -->
+            <div class="panel-card">
+                <div class="card-header">
+                    <h3>Quick Update</h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'panel:case_update' case.pk %}" class="admin-form">
+                        {% csrf_token %}
+                        <div class="form-group">
+                            <label for="status">Status</label>
+                            <select id="status" name="status" class="form-select">
+                                {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if case.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="payment_status">Payment Status</label>
+                            <select id="payment_status" name="payment_status" class="form-select">
+                                {% for value, label in payment_choices %}
+                                <option value="{{ value }}" {% if case.payment_status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Update</button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Payment History -->
+            <div class="panel-card">
+                <div class="card-header">
+                    <h3>Payment History</h3>
+                </div>
+                <div class="card-body">
+                    {% if payments %}
+                    <div class="payment-list">
+                        {% for payment in payments %}
+                        <div class="payment-item">
+                            <div class="payment-amount">{{ payment.currency }} {{ payment.amount|floatformat:2 }}</div>
+                            <div class="payment-meta">{{ payment.method|default:"Payment" }} · {{ payment.payment_date|date:"M d, Y" }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state small">
+                        <p>No payments recorded</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.detail-main .panel-card { margin-bottom: 1.5rem; }
+.detail-main .panel-card:last-child { margin-bottom: 0; }
+.detail-sidebar .panel-card { margin-bottom: 1.5rem; }
+.detail-sidebar .panel-card:last-child { margin-bottom: 0; }
+.info-item .btn { margin-left: 0.5rem; }
+</style>
+<script>
+document.getElementById('caseAiToggleBtn')?.addEventListener('click', function() {
+    var btn = this;
+    var url = btn.getAttribute('data-toggle-url');
+    if (!url) return;
+    btn.disabled = true;
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': typeof getCookie !== 'undefined' ? getCookie('csrftoken') : '', 'Content-Type': 'application/json' },
+        body: '{}'
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) {
+            var el = document.getElementById('caseAiStatus');
+            if (el) el.textContent = data.ai_enabled ? 'On' : 'Off';
+        } else alert(data.error || 'Failed to toggle');
+    }).catch(function() { alert('Request failed'); }).finally(function() { btn.disabled = false; });
+});
+</script>
+{% endblock %}

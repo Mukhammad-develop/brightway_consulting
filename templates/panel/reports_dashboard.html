@@ -1,0 +1,148 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="reports-container">
+    <!-- Live Stats -->
+    <div class="panel-card">
+        <div class="card-header">Live Stats (Last 24 Hours)</div>
+        <div class="card-body">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ live_stats.new_users }}</div>
+                    <div class="stat-label">New Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ live_stats.new_cases }}</div>
+                    <div class="stat-label">New Cases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ live_stats.paid_cases }}</div>
+                    <div class="stat-label">Paid Cases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ live_stats.completed_cases }}</div>
+                    <div class="stat-label">Completed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ live_stats.active_cases }}</div>
+                    <div class="stat-label">Active Cases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ live_stats.docs_uploaded }}</div>
+                    <div class="stat-label">Files Uploaded</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Generate Reports -->
+    <div class="panel-card">
+        <div class="card-header">Generate AI Report</div>
+        <div class="card-body">
+            <div class="report-types-grid">
+                <div class="report-type-card">
+                    <div class="report-icon">📅</div>
+                    <h4>Daily Report</h4>
+                    <p>Last 24 hours analysis</p>
+                    <form method="post" action="{% url 'panel:report_generate' report_type='daily' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">Generate</button>
+                    </form>
+                </div>
+                
+                <div class="report-type-card">
+                    <div class="report-icon">📆</div>
+                    <h4>Weekly Report</h4>
+                    <p>Last 7 days analysis</p>
+                    <form method="post" action="{% url 'panel:report_generate' report_type='weekly' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">Generate</button>
+                    </form>
+                </div>
+                
+                <div class="report-type-card">
+                    <div class="report-icon">🗓️</div>
+                    <h4>Monthly Report</h4>
+                    <p>Last 30 days analysis</p>
+                    <form method="post" action="{% url 'panel:report_generate' report_type='monthly' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">Generate</button>
+                    </form>
+                </div>
+                
+                <div class="report-type-card">
+                    <div class="report-icon">📊</div>
+                    <h4>Quarterly Report</h4>
+                    <p>Last 90 days analysis</p>
+                    <form method="post" action="{% url 'panel:report_generate' report_type='quarterly' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">Generate</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Report History -->
+    <div class="panel-card">
+        <div class="card-header">Report History</div>
+        <div class="card-body">
+            {% if reports %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Period</th>
+                        <th>Generated</th>
+                        <th>AI Analysis</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in reports %}
+                    <tr>
+                        <td><span class="badge badge-{{ report.report_type }}">{{ report.get_report_type_display }}</span></td>
+                        <td>{{ report.period_start }} to {{ report.period_end }}</td>
+                        <td>{{ report.created_at|date:"M d, Y H:i" }}</td>
+                        <td>{% if report.ai_conclusion %}✓{% else %}—{% endif %}</td>
+                        <td>
+                            <a href="{% url 'panel:report_view' report_id=report.pk %}" class="btn btn-xs btn-outline">View</a>
+                            <form method="post" action="{% url 'panel:report_delete' report_id=report.pk %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs btn-danger" onclick="return confirm('Delete this report?')">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No reports generated yet. Generate your first report above!</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.reports-container { display: flex; flex-direction: column; gap: 1.5rem; }
+.stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; }
+.stat-card { background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center; }
+.stat-value { font-size: 1.5rem; font-weight: 600; color: var(--primary-color); }
+.stat-label { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+.report-types-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; }
+.report-type-card { background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; text-align: center; }
+.report-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.report-type-card h4 { margin: 0 0 0.5rem 0; }
+.report-type-card p { margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); }
+.badge-daily { background: #3b82f6; }
+.badge-weekly { background: #8b5cf6; }
+.badge-monthly { background: #10b981; }
+.badge-quarterly { background: #f59e0b; }
+@media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) { .report-types-grid { grid-template-columns: repeat(2, 1fr); } }
+</style>
+{% endblock %}

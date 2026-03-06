@@ -1,0 +1,128 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:service_add' %}" class="btn btn-primary">+ Add Service</a>
+{% endblock %}
+
+{% block content %}
+<div class="services-container">
+    {% if services %}
+    <div class="services-grid">
+        {% for item in services %}
+        <div class="service-card" data-service-id="{{ item.service.pk }}">
+            <div class="service-card-header">
+                <div class="service-info">
+                    <span class="service-emoji">{{ item.service.icon_emoji }}</span>
+                    <div class="service-details">
+                        <h3>{{ item.service.name }}</h3>
+                        <span class="badge badge-{{ item.service.badge_color }}">{{ item.service.slug }}</span>
+                        <span class="service-cases">{{ item.case_count }} cases</span>
+                    </div>
+                </div>
+                <div class="service-actions">
+                    <label class="toggle-switch">
+                        <input type="checkbox" {% if item.service.is_active %}checked{% endif %} 
+                               onchange="toggleService({{ item.service.pk }}, this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="service-card-body">
+                <p class="service-description">{{ item.service.description|default:"No description" }}</p>
+                
+                {% if item.service.name_ru %}
+                <p class="service-translation"><span class="lang-badge">RU</span> {{ item.service.name_ru }}</p>
+                {% endif %}
+                {% if item.service.name_uz %}
+                <p class="service-translation"><span class="lang-badge">UZ</span> {{ item.service.name_uz }}</p>
+                {% endif %}
+                
+                <div class="service-meta">
+                    <span>Order: {{ item.service.display_order }}</span>
+                    <span>Keywords: {{ item.service.keywords|truncatechars:50|default:"None" }}</span>
+                </div>
+                
+                {% if item.steps %}
+                <div class="service-steps-preview">
+                    <span class="steps-label">Steps ({{ item.steps|length }}):</span>
+                    <div class="steps-flow">
+                        {% for step_item in item.steps %}
+                        <span class="step-chip"><span class="step-chip-icon" aria-hidden="true">{{ step_item.icon }}</span>{{ step_item.step.label }}</span>
+                        {% if not forloop.last %}<span class="step-arrow">→</span>{% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="service-card-footer">
+                <a href="{% url 'panel:service_edit' service_id=item.service.pk %}" class="btn btn-outline btn-sm">Edit</a>
+                <a href="{% url 'panel:service_steps' service_id=item.service.pk %}" class="btn btn-outline btn-sm">Manage Steps</a>
+                {% if item.case_count == 0 %}
+                <form method="post" action="{% url 'panel:service_delete' service_id=item.service.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete this service?')">Delete</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No services defined yet.</p>
+        <a href="{% url 'panel:service_add' %}" class="btn btn-primary">Create First Service</a>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.services-container { padding: 0; }
+.services-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
+.service-card { background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; }
+.service-card-header { padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); }
+.service-info { display: flex; align-items: center; gap: 1rem; }
+.service-emoji { font-size: 2rem; }
+.service-details h3 { margin: 0 0 0.25rem 0; font-size: 1.1rem; }
+.service-cases { font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem; }
+.service-card-body { padding: 1.5rem; }
+.service-description { margin: 0 0 1rem 0; color: var(--text-secondary); }
+.service-translation { margin: 0.25rem 0; font-size: 0.85rem; color: var(--text-secondary); }
+.lang-badge { background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-right: 0.5rem; }
+.service-meta { display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem; }
+.service-steps-preview { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+.steps-label { font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.5rem; }
+.steps-flow { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.step-chip { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-tertiary); padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; }
+.step-chip-icon { font-size: 0.95em; line-height: 1; }
+.step-arrow { color: var(--text-muted); }
+.service-card-footer { padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.5rem; }
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; inset: 0; background: var(--bg-tertiary); border: 1px solid rgba(255,255,255,0.15); border-radius: 24px; transition: 0.3s; }
+.toggle-slider:before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #e5e7eb; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.35); transition: 0.3s; }
+input:checked + .toggle-slider { background: var(--primary-color, var(--accent-primary)); border-color: rgba(255,255,255,0.2); }
+input:checked + .toggle-slider:before { transform: translateX(20px); background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+input:focus-visible + .toggle-slider { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+</style>
+
+<script>
+function toggleService(serviceId, isActive) {
+    fetch(`/admin/services/${serviceId}/toggle`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    }).then(response => {
+        if (!response.ok) {
+            alert('Failed to update service status');
+            location.reload();
+        }
+    });
+}
+</script>
+{% endblock %}
