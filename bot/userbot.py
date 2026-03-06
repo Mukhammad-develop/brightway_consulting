@@ -28,7 +28,8 @@ django.setup()
 
 from django.conf import settings
 from telethon import TelegramClient, events, Button
-from telethon.tl.types import Message, MessageMediaPhoto, MessageMediaDocument
+from telethon.tl import functions
+from telethon.tl.types import Message, MessageMediaPhoto, MessageMediaDocument, SendMessageTypingAction
 
 from .messages import t, get_all_languages, LANG_CALLBACKS
 from .services import (
@@ -413,8 +414,8 @@ def register_handlers(client: TelegramClient, account_index: int):
             
             lang = user.language_code if user else 'en'
             
-            # Detect service
-            detected = detect_service(text)
+            # Detect service (Django ORM — must run in thread from async context)
+            detected = await run_sync(lambda: detect_service(text))
             
             # Get or create case (do not add user message yet — we may send opening first)
             case = await run_sync(lambda: _get_or_open_case(user, detected or 'general'))
@@ -439,7 +440,7 @@ def register_handlers(client: TelegramClient, account_index: int):
             # Show typing while AI is generating (Telegram typing lasts ~5s, repeat every 4s)
             async def typing_loop():
                 while True:
-                    await client.action(event.chat_id, 'typing')
+                    await client(functions.messages.SetTypingRequest(peer=event.chat_id, action=SendMessageTypingAction()))
                     await asyncio.sleep(4)
 
             get_ai_response_sync = lambda: ask_ai(case.get_conversation(), case.service, lang)
@@ -559,7 +560,7 @@ def register_handlers(client: TelegramClient, account_index: int):
             # Show typing while AI is generating
             async def typing_loop_media():
                 while True:
-                    await client.action(event.chat_id, 'typing')
+                    await client(functions.messages.SetTypingRequest(peer=event.chat_id, action=SendMessageTypingAction()))
                     await asyncio.sleep(4)
 
             def get_ai_and_maybe_rename():
