@@ -274,13 +274,15 @@ def process_ai_response(user, case, text: str, lang: str, send_reply: bool = Tru
         case.add_message('assistant', to_send)
 
         if READY_FOR_CONSULTANT_MARKER in ai_response:
-            try:
-                try_assign_case_to_consultant(case, user)
-            except Exception as e:
-                logger.error(f"Failed to assign case to consultant: {e}")
-            # Auto-disable AI for this case until it is closed
-            case.ai_enabled = False
-            case.save(update_fields=['ai_enabled'])
+            # Only turn off AI when conversation is long enough (avoid turning off on first reply by mistake)
+            conv_after = case.get_conversation()
+            if len(conv_after) >= 4:
+                try:
+                    try_assign_case_to_consultant(case, user)
+                except Exception as e:
+                    logger.error(f"Failed to assign case to consultant: {e}")
+                case.ai_enabled = False
+                case.save(update_fields=['ai_enabled'])
 
         # Check if we should update user profile
         message_count = len(conversation)

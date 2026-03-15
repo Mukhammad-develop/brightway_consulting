@@ -107,8 +107,13 @@ class Case(models.Model):
         self.save(update_fields=['conversation_history'])
     
     def add_message(self, role, content, sender=None):
-        """Append a message to the conversation history."""
+        """Append a message to the conversation history. Skips if the last message is already the same (role + content) to avoid duplicates from double delivery."""
         conv = self.get_conversation()
+        content_str = (content or '').strip()
+        if conv and content_str:
+            last = conv[-1]
+            if last.get('role') == role and (last.get('content') or '').strip() == content_str:
+                return  # duplicate, e.g. same "Привет" delivered twice
         message = {
             'role': role,
             'content': content,

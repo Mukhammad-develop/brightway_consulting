@@ -486,9 +486,12 @@ def register_handlers(client: TelegramClient, account_index: int):
                         from core.models import Case
                         from bot.bot import try_assign_case_to_consultant
                         c = Case.objects.get(pk=case.pk)
-                        try_assign_case_to_consultant(c, user)
-                        c.ai_enabled = False
-                        c.save(update_fields=['ai_enabled'])
+                        conv = c.get_conversation()
+                        # Only turn off AI when conversation is long enough (avoid first-reply mistake)
+                        if len(conv) >= 4:
+                            try_assign_case_to_consultant(c, user)
+                            c.ai_enabled = False
+                            c.save(update_fields=['ai_enabled'])
                     await run_sync(assign_and_disable_ai)
                 # Save and send response
                 await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', to_send))
