@@ -397,10 +397,10 @@ def register_handlers(client: TelegramClient, account_index: int):
             # If we don't have this user yet, check Telegram chat history first
             user_exists = await run_sync(lambda: __user_exists_by_telegram_id(sender.id))
             if not user_exists:
-                # Only import if there was real prior chat (≥2 messages). limit=1 would be the message they just sent.
+                # Only import if there was real prior chat (≥3 messages). With 1–2 messages it's usually the first contact message (e.g. "Привет") and we must not treat as prior chat or AI will be off from the start.
                 try:
-                    hist = await client.get_messages(sender.id, limit=2)
-                    if hist and len(hist) >= 2:
+                    hist = await client.get_messages(sender.id, limit=3)
+                    if hist and len(hist) >= 3:
                         # Prior chat exists: import it, create user+case with ai_enabled=False, analyze with AI
                         count, err = await fetch_and_save_chat(client, str(sender.id), limit=3000, import_req_id=None)
                         if not err:
@@ -519,12 +519,12 @@ def register_handlers(client: TelegramClient, account_index: int):
         try:
             sender = await event.get_sender()
             
-            # If new user, check for prior chat (same as text handler) so we don't send opening over imported history
+            # If new user, check for prior chat (same as text handler): need ≥3 messages to avoid treating first contact as prior chat
             user_exists = await run_sync(lambda: __user_exists_by_telegram_id(sender.id))
             if not user_exists:
                 try:
-                    hist = await client.get_messages(sender.id, limit=2)
-                    if hist and len(hist) >= 2:
+                    hist = await client.get_messages(sender.id, limit=3)
+                    if hist and len(hist) >= 3:
                         count, err = await fetch_and_save_chat(client, str(sender.id), limit=3000, import_req_id=None)
                         if not err:
                             await run_sync(lambda: _set_linked_account(sender.id, account_index))
