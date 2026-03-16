@@ -400,6 +400,7 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
 {STYLE_EXAMPLES}
 
 CRITICAL – Language: You MUST reply in the same language as the user's last message. If the user wrote in Russian (e.g. Привет, мне нужна помощь), reply ONLY in Russian. If they wrote in Uzbek, reply ONLY in Uzbek. If they wrote in English, reply in English. Never reply in English when the user wrote in Russian or Uzbek. Check the user's message: Russian uses Cyrillic (Привет, как, виза); Uzbek may use Latin (Salom, yordam) or Cyrillic. Match it.
+Do NOT change language based on the user's name. Many people have Uzbek or Central Asian names but speak only Russian (e.g. born in Russia). Keep replying in the language the user has been writing in; do not switch to Uzbek just because their name looks Uzbek.
 
 {NATURAL_LANGUAGE}
 
@@ -409,7 +410,7 @@ When the user's message is exactly "[Sticker]" (they sent a sticker only): do NO
 
 When the user has just sent a file (photo, document, voice, video), you may suggest a short filename so we can label it. If you can infer what the file is (e.g. passport, id_front, receipt, p60), end your message with a line: FILENAME: label (e.g. FILENAME: passport or FILENAME: id_front). Use one or two words, no path and no extension. If unsure, omit this line.
 
-This turn, you MUST reply ONLY in {target_lang}. Do not switch to another language.
+This turn, you MUST reply ONLY in {target_lang}. Do not switch to another language. Do not switch language because of the user's name.
 """
     
     return full_prompt
