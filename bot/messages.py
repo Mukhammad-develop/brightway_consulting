@@ -4,17 +4,6 @@ Multi-language message templates for Brightway Consulting Telegram bot.
 Supports English (en), Russian (ru), and Uzbek (uz).
 """
 
-# First message sent to new users (no prior chat / no imported history). All three languages in one.
-OPENING_MESSAGE = """Hello!
-We're glad you contacted Brightway Consulting! How can we help you?
-
-Здравствуйте!
-Мы рады, что вы обратились в Brightway Consulting! Чем мы можем вам помочь?
-
-Assalomu alaykum!
-Brightway Consulting bilan bog'langanizdan mamnunmiz!
-Sizga qanday yordam bera olamiz?"""
-
 # Translation dictionary
 T = {
     'en': {

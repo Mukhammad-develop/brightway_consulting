@@ -245,7 +245,7 @@ def try_assign_case_to_consultant(case, user):
 def process_ai_response(user, case, text: str, lang: str, send_reply: bool = True):
     """
     Process user message and get AI response with error handling.
-    When send_reply=False, only stores the user message (and optionally opening) — no AI call, no return value sent.
+    When send_reply=False, only stores the user message — no AI call, no return value sent.
     When AI is disabled for the case, only stores the user message and returns None (no reply sent).
     When AI signals [READY_FOR_CONSULTANT], assigns case to a consultant and turns AI off for this case.
     Returns (response_str, filename_label or None). If AI suggested FILENAME: label, filename_label is set.
@@ -537,38 +537,7 @@ def handle_text_message(message):
             case.service = current_service
             case.save(update_fields=['service'])
         
-        # New user (no prior messages): store in chronological order (user first, then our opening), send opening. Only call AI if user already stated a service — our greeting already asks "How can we help you?", no need to ask again.
-        from bot.messages import OPENING_MESSAGE
-        conv = case.get_conversation()
-        if len(conv) == 0:
-            case.add_message('user', text)
-            case.add_message('assistant', OPENING_MESSAGE)
-            bot.send_message(message.chat.id, OPENING_MESSAGE)
-            # If user only said hello (no specific service detected), wait for their next message
-            if current_service == 'general':
-                logger.info(f"First message from {user.telegram_id}: greeting only, waiting for reply")
-                return
-            # User already stated what they want (e.g. "Привет, мне нужна помощ по визе") — get AI to continue
-            conversation = case.get_conversation()
-            ai_response = ask_ai(conversation, case.service, lang)
-            if ai_response:
-                to_store = ai_response.replace(READY_FOR_CONSULTANT_MARKER, '').strip()
-                to_store, _ = parse_filename_from_response(to_store)
-                to_store = to_store.strip()
-                case.add_message('assistant', to_store)
-                bot.send_message(message.chat.id, to_store)
-                if READY_FOR_CONSULTANT_MARKER in ai_response:
-                    conv_after = case.get_conversation()
-                    if len(conv_after) >= 4:
-                        try:
-                            try_assign_case_to_consultant(case, user)
-                        except Exception as e:
-                            logger.error(f"Failed to assign case to consultant: {e}")
-                        case.ai_enabled = False
-                        case.save(update_fields=['ai_enabled'])
-            logger.info(f"First message from {user.telegram_id}: sent opening + AI reply (service already stated)")
-            return
-        # Not first message: add user and get AI response
+        # AI handles conversation from the start (no auto hello message)
         stop_typing = threading.Event()
         typing_thread = threading.Thread(
             target=_typing_loop,
@@ -591,24 +560,14 @@ def handle_text_message(message):
 
 @bot.message_handler(content_types=['sticker'])
 def handle_sticker(message):
-    """Handle stickers. First message (e.g. Telegram's default hello sticker) = treat like user said hello: greeting only, no AI, wait for reply."""
+    """Handle stickers; AI responds from the start (no auto hello)."""
     try:
         user = get_or_create_user(message.from_user)
         if not user:
             bot.reply_to(message, "Sorry, an error occurred.")
             return
         lang = get_user_language(user)
-        case = get_or_open_case(user, 'general')  # Stickers can't be classified; treat as general
-        conv = case.get_conversation()
-        if len(conv) == 0:
-            # First message is a sticker = same as "hello": send our greeting only, no AI
-            from bot.messages import OPENING_MESSAGE
-            case.add_message('user', '[Sticker]')
-            case.add_message('assistant', OPENING_MESSAGE)
-            bot.send_message(message.chat.id, OPENING_MESSAGE)
-            logger.info(f"First message from {user.telegram_id} was sticker (treated as hello): sent opening only")
-            return
-        # Not first message: add sticker to conversation and get AI response
+        case = get_or_open_case(user, 'general')
         stop_typing = threading.Event()
         typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
         typing_thread.start()
@@ -635,15 +594,6 @@ def handle_voice_message(message):
         
         lang = get_user_language(user)
         case = get_or_open_case(user, 'general')
-        conv = case.get_conversation()
-        if len(conv) == 0:
-            from bot.messages import OPENING_MESSAGE
-            case.add_message('user', '[Voice]')
-            case.add_message('assistant', OPENING_MESSAGE)
-            bot.send_message(message.chat.id, OPENING_MESSAGE)
-            logger.info(f"First message from {user.telegram_id} was voice: sent opening only")
-            return
-        
         # Get file info
         if message.voice:
             file_info = bot.get_file(message.voice.file_id)
@@ -755,15 +705,6 @@ def handle_document(message):
         state = get_conversation_state(message.from_user.id)
         current_service = state.get('service', 'general')
         case = get_or_open_case(user, current_service)
-        conv = case.get_conversation()
-        if len(conv) == 0:
-            from bot.messages import OPENING_MESSAGE
-            case.add_message('user', '[Media]')
-            case.add_message('assistant', OPENING_MESSAGE)
-            bot.send_message(message.chat.id, OPENING_MESSAGE)
-            logger.info(f"First message from {user.telegram_id} was document: sent opening only")
-            return
-        
         # Get file info
         doc = message.document
         file_info = bot.get_file(doc.file_id)
@@ -860,15 +801,6 @@ def handle_photo(message):
         state = get_conversation_state(message.from_user.id)
         current_service = state.get('service', 'general')
         case = get_or_open_case(user, current_service)
-        conv = case.get_conversation()
-        if len(conv) == 0:
-            from bot.messages import OPENING_MESSAGE
-            case.add_message('user', '[Photo]')
-            case.add_message('assistant', OPENING_MESSAGE)
-            bot.send_message(message.chat.id, OPENING_MESSAGE)
-            logger.info(f"First message from {user.telegram_id} was photo: sent opening only")
-            return
-        
         # Get largest photo
         photo = message.photo[-1]
         file_info = bot.get_file(photo.file_id)

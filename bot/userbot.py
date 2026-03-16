@@ -440,22 +440,9 @@ def register_handlers(client: TelegramClient, account_index: int):
             # Detect service with AI (Django ORM — must run in thread from async context)
             detected = await run_sync(lambda: ai_detect_service(text))
             
-            # Get or create case (do not add user message yet — we may send opening first)
+            # Get or create case; AI handles conversation from the start (no auto hello)
             case = await run_sync(lambda: _get_or_open_case(user, detected or 'general'))
-            conv = case.get_conversation()
-            is_first_message = len(conv) == 0
-            # New user (no prior messages / no imported chat): store in chronological order (user first, then our opening), send opening. Only call AI if user already stated a service (e.g. "Привет, мне нужна помощ по визе") — otherwise our greeting already asks "How can we help you?", no need to ask again.
-            if is_first_message:
-                from bot.messages import OPENING_MESSAGE
-                await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
-                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', OPENING_MESSAGE))
-                await event.respond(OPENING_MESSAGE)
-                # If user only said hello (no service detected), wait for their next message — don't call AI to repeat "what do you need?"
-                if not detected or detected == 'general':
-                    logger.info(f"[Account {account_index}] First message from {sender.id}: greeting only, waiting for reply")
-                    return
-            else:
-                await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
+            await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
 
             # If AI is turned off for this case, no reply (consultant will reply later)
             if not getattr(case, 'ai_enabled', True):
@@ -548,17 +535,25 @@ def register_handlers(client: TelegramClient, account_index: int):
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
             
             lang = user.language_code if user else 'en'
-            case = await run_sync(lambda: _get_or_open_case(user, 'general'))  # Stickers/media can't be classified; treat as general
+            case = await run_sync(lambda: _get_or_open_case(user, 'general'))
             conv = await run_sync(lambda: case.get_conversation())
             
-            # First message is sticker or any media = treat like user said hello: greeting only, no AI, wait for reply (Telegram often suggests hello stickers to start a chat)
+            # First message is media (e.g. sticker): add label, get AI reply, send — no download
             if len(conv) == 0:
-                from bot.messages import OPENING_MESSAGE
                 label = _first_media_label(event.media)  # e.g. "[Sticker]"
                 await run_sync(lambda: _add_message_to_case(case.pk, 'user', label))
-                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', OPENING_MESSAGE))
-                await event.respond(OPENING_MESSAGE)
-                logger.info(f"[Account {account_index}] First message from {sender.id} was media ({label}, treated as hello): sent opening only")
+                def _first_media_ai():
+                    from core.models import Case
+                    c = Case.objects.get(pk=case.pk)
+                    return ask_ai(c.get_conversation(), c.service, lang)
+                reply = await run_sync(_first_media_ai)
+                if reply:
+                    to_send = reply.replace(READY_FOR_CONSULTANT_MARKER, '').strip()
+                    await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', to_send))
+                    await event.respond(to_send)
+                else:
+                    await event.respond(t(lang, 'ai_error'))
+                logger.info(f"[Account {account_index}] First message from {sender.id} was media ({label}): AI replied")
                 return
             
             # Download media
