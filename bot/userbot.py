@@ -454,7 +454,12 @@ def register_handlers(client: TelegramClient, account_index: int):
                     await client(functions.messages.SetTypingRequest(peer=event.chat_id, action=SendMessageTypingAction()))
                     await asyncio.sleep(4)
 
-            get_ai_response_sync = lambda: ask_ai(case.get_conversation(), case.service, lang)
+            # Refetch case so get_conversation() includes the message we just added (in-memory case is stale)
+            def _get_ai_reply():
+                from core.models import Case
+                c = Case.objects.get(pk=case.pk)
+                return ask_ai(c.get_conversation(), c.service, lang)
+            get_ai_response_sync = _get_ai_reply
             typing_task = asyncio.create_task(typing_loop())
             try:
                 reply = await run_sync(get_ai_response_sync)

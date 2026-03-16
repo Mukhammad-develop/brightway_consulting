@@ -240,6 +240,8 @@ Based on the user message, determine which service they need:
 - "company" - Company accounting, VAT, payroll, limited company services
 - "general" - General inquiry or unclear
 
+The user may write in English, Russian, or Uzbek. Examples: "мне нужна помощь по визе", "помощ по визе", "виза" -> student or schengen (visa). "налог", "возврат налога", "tax refund" -> paye. "бухгалтерия", "accounting" -> company. When in doubt between student and schengen for "visa", prefer "schengen" unless they mention university/student.
+
 Respond with ONLY the service slug (student, paye, schengen, self, company, or general).
 """
     
