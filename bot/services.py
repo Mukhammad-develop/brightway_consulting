@@ -339,7 +339,7 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
 
 {STYLE_EXAMPLES}
 
-IMPORTANT – Language: Reply in the same language the user is using. If the user has written in Uzbek (in this or any previous message in the conversation), reply ONLY in Uzbek from the first reply – do not start in English. If the user has written in Russian, reply ONLY in Russian. If their last message is mainly in Uzbek, reply in Uzbek; if mainly in Russian, reply in Russian; otherwise use {target_lang}. Never reply in English when the user is writing in Uzbek or Russian.
+CRITICAL – Language: You MUST reply in the same language as the user's last message. If the user wrote in Russian (e.g. Привет, мне нужна помощь), reply ONLY in Russian. If they wrote in Uzbek, reply ONLY in Uzbek. If they wrote in English, reply in English. Never reply in English when the user wrote in Russian or Uzbek. Check the user's message: Russian uses Cyrillic (Привет, как, виза); Uzbek may use Latin (Salom, yordam) or Cyrillic. Match it.
 
 {NATURAL_LANGUAGE}
 
