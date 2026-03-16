@@ -537,18 +537,38 @@ def handle_text_message(message):
             case.service = current_service
             case.save(update_fields=['service'])
         
-        # New user (no prior messages): send only the opening message; AI replies when they answer that
+        # New user (no prior messages): store in chronological order (user first, then our opening), send opening. Only call AI if user already stated a service — our greeting already asks "How can we help you?", no need to ask again.
         from bot.messages import OPENING_MESSAGE
         conv = case.get_conversation()
         if len(conv) == 0:
+            case.add_message('user', text)
             case.add_message('assistant', OPENING_MESSAGE)
             bot.send_message(message.chat.id, OPENING_MESSAGE)
-            # Store user's first message; no AI reply yet — they get AI after replying to the opening
-            process_ai_response(user, case, text, lang, send_reply=False)
-            logger.info(f"First message from {user.telegram_id}: sent opening only")
+            # If user only said hello (no specific service detected), wait for their next message
+            if current_service == 'general':
+                logger.info(f"First message from {user.telegram_id}: greeting only, waiting for reply")
+                return
+            # User already stated what they want (e.g. "Привет, мне нужна помощ по визе") — get AI to continue
+            conversation = case.get_conversation()
+            ai_response = ask_ai(conversation, case.service, lang)
+            if ai_response:
+                to_store = ai_response.replace(READY_FOR_CONSULTANT_MARKER, '').strip()
+                to_store, _ = parse_filename_from_response(to_store)
+                to_store = to_store.strip()
+                case.add_message('assistant', to_store)
+                bot.send_message(message.chat.id, to_store)
+                if READY_FOR_CONSULTANT_MARKER in ai_response:
+                    conv_after = case.get_conversation()
+                    if len(conv_after) >= 4:
+                        try:
+                            try_assign_case_to_consultant(case, user)
+                        except Exception as e:
+                            logger.error(f"Failed to assign case to consultant: {e}")
+                        case.ai_enabled = False
+                        case.save(update_fields=['ai_enabled'])
+            logger.info(f"First message from {user.telegram_id}: sent opening + AI reply (service already stated)")
             return
-        
-        # Show typing while AI is generating (typing action lasts ~5s, so repeat every 4s)
+        # Not first message: add user and get AI response
         stop_typing = threading.Event()
         typing_thread = threading.Thread(
             target=_typing_loop,
@@ -560,11 +580,8 @@ def handle_text_message(message):
             response, _ = process_ai_response(user, case, text, lang)
         finally:
             stop_typing.set()
-        
-        # Send response only if AI replied
         if response:
             bot.send_message(message.chat.id, response)
-        
         logger.info(f"Message from {user.telegram_id}: {text[:50]}...")
         
     except Exception as e:
@@ -574,21 +591,22 @@ def handle_text_message(message):
 
 @bot.message_handler(content_types=['sticker'])
 def handle_sticker(message):
-    """Handle stickers: first message gets opening only; later messages get AI reply."""
+    """Handle stickers. First message (e.g. Telegram's default hello sticker) = treat like user said hello: greeting only, no AI, wait for reply."""
     try:
         user = get_or_create_user(message.from_user)
         if not user:
             bot.reply_to(message, "Sorry, an error occurred.")
             return
         lang = get_user_language(user)
-        case = get_or_open_case(user, 'general')
+        case = get_or_open_case(user, 'general')  # Stickers can't be classified; treat as general
         conv = case.get_conversation()
         if len(conv) == 0:
+            # First message is a sticker = same as "hello": send our greeting only, no AI
             from bot.messages import OPENING_MESSAGE
+            case.add_message('user', '[Sticker]')
             case.add_message('assistant', OPENING_MESSAGE)
             bot.send_message(message.chat.id, OPENING_MESSAGE)
-            case.add_message('user', '[Sticker]')
-            logger.info(f"First message from {user.telegram_id} was sticker: sent opening only")
+            logger.info(f"First message from {user.telegram_id} was sticker (treated as hello): sent opening only")
             return
         # Not first message: add sticker to conversation and get AI response
         stop_typing = threading.Event()
@@ -620,9 +638,9 @@ def handle_voice_message(message):
         conv = case.get_conversation()
         if len(conv) == 0:
             from bot.messages import OPENING_MESSAGE
+            case.add_message('user', '[Voice]')
             case.add_message('assistant', OPENING_MESSAGE)
             bot.send_message(message.chat.id, OPENING_MESSAGE)
-            case.add_message('user', '[Voice]')
             logger.info(f"First message from {user.telegram_id} was voice: sent opening only")
             return
         
@@ -740,9 +758,9 @@ def handle_document(message):
         conv = case.get_conversation()
         if len(conv) == 0:
             from bot.messages import OPENING_MESSAGE
+            case.add_message('user', '[Media]')
             case.add_message('assistant', OPENING_MESSAGE)
             bot.send_message(message.chat.id, OPENING_MESSAGE)
-            case.add_message('user', '[Media]')
             logger.info(f"First message from {user.telegram_id} was document: sent opening only")
             return
         
@@ -845,9 +863,9 @@ def handle_photo(message):
         conv = case.get_conversation()
         if len(conv) == 0:
             from bot.messages import OPENING_MESSAGE
+            case.add_message('user', '[Photo]')
             case.add_message('assistant', OPENING_MESSAGE)
             bot.send_message(message.chat.id, OPENING_MESSAGE)
-            case.add_message('user', '[Photo]')
             logger.info(f"First message from {user.telegram_id} was photo: sent opening only")
             return
         

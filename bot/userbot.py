@@ -444,17 +444,18 @@ def register_handlers(client: TelegramClient, account_index: int):
             case = await run_sync(lambda: _get_or_open_case(user, detected or 'general'))
             conv = case.get_conversation()
             is_first_message = len(conv) == 0
-            # New user (no prior messages / no imported chat): send only the opening; AI replies when they answer
+            # New user (no prior messages / no imported chat): store in chronological order (user first, then our opening), send opening. Only call AI if user already stated a service (e.g. "Привет, мне нужна помощ по визе") — otherwise our greeting already asks "How can we help you?", no need to ask again.
             if is_first_message:
                 from bot.messages import OPENING_MESSAGE
+                await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
                 await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', OPENING_MESSAGE))
                 await event.respond(OPENING_MESSAGE)
-            await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
-
-            # After first message we only sent the opening — no AI reply until user replies to it
-            if is_first_message:
-                logger.info(f"[Account {account_index}] First message from {sender.id}: sent opening only")
-                return
+                # If user only said hello (no service detected), wait for their next message — don't call AI to repeat "what do you need?"
+                if not detected or detected == 'general':
+                    logger.info(f"[Account {account_index}] First message from {sender.id}: greeting only, waiting for reply")
+                    return
+            else:
+                await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
 
             # If AI is turned off for this case, no reply (consultant will reply later)
             if not getattr(case, 'ai_enabled', True):
@@ -547,17 +548,17 @@ def register_handlers(client: TelegramClient, account_index: int):
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
             
             lang = user.language_code if user else 'en'
-            case = await run_sync(lambda: _get_or_open_case(user, 'general'))
+            case = await run_sync(lambda: _get_or_open_case(user, 'general'))  # Stickers/media can't be classified; treat as general
             conv = await run_sync(lambda: case.get_conversation())
             
-            # First message (any media): send opening only, no AI, no download
+            # First message is sticker or any media = treat like user said hello: greeting only, no AI, wait for reply (Telegram often suggests hello stickers to start a chat)
             if len(conv) == 0:
                 from bot.messages import OPENING_MESSAGE
+                label = _first_media_label(event.media)  # e.g. "[Sticker]"
+                await run_sync(lambda: _add_message_to_case(case.pk, 'user', label))
                 await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', OPENING_MESSAGE))
                 await event.respond(OPENING_MESSAGE)
-                label = _first_media_label(event.media)
-                await run_sync(lambda: _add_message_to_case(case.pk, 'user', label))
-                logger.info(f"[Account {account_index}] First message from {sender.id} was media ({label}): sent opening only")
+                logger.info(f"[Account {account_index}] First message from {sender.id} was media ({label}, treated as hello): sent opening only")
                 return
             
             # Download media
