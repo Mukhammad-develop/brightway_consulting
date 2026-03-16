@@ -284,6 +284,47 @@ Respond with ONLY the service slug (student, paye, schengen, self, company, or g
         return None
 
 
+def detect_reply_lang(text: str):
+    """
+    Detect reply language from user message using AI so we can force the same language in the reply.
+    Returns 'ru', 'uz', 'en', or None (use profile language) on empty input or API failure.
+    """
+    if not text or not isinstance(text, str):
+        return None
+    t = text.strip()
+    if not t or t == '[Sticker]' or t.startswith('[FILE:'):
+        return None
+
+    client = get_openai_client()
+    if not client:
+        return None
+    if not _check_rate_limit():
+        return None
+
+    try:
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': 'You detect the language of the user message. Reply with exactly one word: ru (Russian), uz (Uzbek), or en (English). No other text.'},
+                {'role': 'user', 'content': t[:1000]}
+            ],
+            max_tokens=5,
+            temperature=0,
+            timeout=10
+        )
+        raw = (response.choices[0].message.content or '').strip().lower()
+        if response.usage:
+            _track_usage(response.usage.total_tokens)
+        code = (raw.split()[0] if raw else '').rstrip('.,;:')
+        if code in ('ru', 'uz', 'en'):
+            return code
+        return None
+    except Exception as e:
+        logger.warning(f"Language detection failed: {e}")
+        _track_usage(error=True)
+        return None
+
+
 # ============== System Prompts ==============
 
 def build_system_prompt(service: str, lang: str = 'en') -> str:
@@ -350,6 +391,8 @@ If the user has ALREADY said they need visa, tax refund, or accounting (e.g. "м
 When the user's message is exactly "[Sticker]" (they sent a sticker only): do NOT say "it seems you sent a sticker", "you sent a sticker", or similar. Instead reply briefly asking them to type what they need (e.g. Schengen visa, tax refund, accounting) so you can help. When the user sent plain text, do not refer to stickers.
 
 When the user has just sent a file (photo, document, voice, video), you may suggest a short filename so we can label it. If you can infer what the file is (e.g. passport, id_front, receipt, p60), end your message with a line: FILENAME: label (e.g. FILENAME: passport or FILENAME: id_front). Use one or two words, no path and no extension. If unsure, omit this line.
+
+This turn, you MUST reply ONLY in {target_lang}. Do not switch to another language.
 """
     
     return full_prompt
@@ -497,8 +540,13 @@ def get_ai_response(message: str, conversation_history: list = None, service: st
     if not client:
         return None
     
+    # Reply in the same language as the user's message (overrides profile when detectable)
+    effective_lang = detect_reply_lang(message) or lang
     # Build system prompt
-    system_prompt = build_system_prompt(service or 'general', lang)
+    system_prompt = build_system_prompt(service or 'general', effective_lang)
+    # When we already know the service, tell the model not to ask again
+    if service and service != 'general':
+        system_prompt += "\n\nThe user has already stated they need this service. Do NOT ask what service they need. Start by acknowledging and asking the first question or document for this service."
     
     # Prepare messages
     messages = [{'role': 'system', 'content': system_prompt}]
