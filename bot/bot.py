@@ -262,6 +262,9 @@ def process_ai_response(user, case, text: str, lang: str, send_reply: bool = Tru
 
     # Get AI response
     conversation = case.get_conversation()
+    text_snippet = (text or '')[:60].replace('\n', ' ')
+    print(f"[BOT] handle_text: calling ask_ai case.service={case.service!r} lang={lang!r} text={text_snippet!r}")
+    logger.info(f"[BOT] handle_text: calling ask_ai case.service={case.service!r} lang={lang!r} text={text_snippet!r}")
     ai_response = ask_ai(conversation, case.service, lang)
 
     if ai_response:
@@ -525,17 +528,27 @@ def handle_text_message(message):
         if not current_service:
             detected_service = ai_detect_service(text)
             current_service = detected_service or 'general'
-        
+            print(f"[BOT] handle_text: ai_detect_service(text) -> {detected_service!r} -> current_service={current_service!r}")
+            logger.info(f"[BOT] handle_text: ai_detect_service -> {detected_service!r} current_service={current_service!r}")
+        else:
+            print(f"[BOT] handle_text: using existing current_service={current_service!r}")
+            logger.info(f"[BOT] handle_text: using existing current_service={current_service!r}")
+
         # Update conversation state
         update_conversation_state(message.from_user.id, service=current_service)
-        
+
         # Get or create case
         case = get_or_open_case(user, current_service)
-        
+
         # Update case service if it changed
         if case.service == 'general' and current_service != 'general':
             case.service = current_service
             case.save(update_fields=['service'])
+            print(f"[BOT] handle_text: updated case.service to {case.service!r}")
+            logger.info(f"[BOT] handle_text: updated case.service to {case.service!r}")
+
+        print(f"[BOT] handle_text: before process_ai_response case.service={case.service!r}")
+        logger.info(f"[BOT] handle_text: before process_ai_response case.service={case.service!r}")
         
         # AI handles conversation from the start (no auto hello message)
         stop_typing = threading.Event()

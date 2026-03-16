@@ -269,16 +269,20 @@ Respond with ONLY the service slug (student, paye, schengen, self, company, or g
         _track_usage(response.usage.total_tokens if response.usage else 0, response_time=response_time)
         
         result = response.choices[0].message.content.strip().lower()
-        
+        # Normalize: take first word in case model added extra text
+        result = (result.split()[0] if result else '').rstrip('.,;:')
+
         # Validate response
         valid_services = ['student', 'paye', 'schengen', 'self', 'company', 'general']
+        out = result if result in valid_services and result != 'general' else None
+        print(f"[SVC] ai_detect_service: text={text[:60]!r} -> raw={result!r} -> return={out!r}")
+        logger.info(f"AI detected service: {result} for text: {text[:50]}... -> return {out}")
         if result in valid_services:
-            logger.info(f"AI detected service: {result} for text: {text[:50]}...")
-            return result if result != 'general' else None
-        
+            return out
         return None
-        
+
     except Exception as e:
+        print(f"[SVC] ai_detect_service: FAILED text={text[:60]!r} error={e}")
         logger.error(f"AI service detection error: {e}")
         _track_usage(error=True)
         return None
@@ -289,23 +293,32 @@ def detect_reply_lang(text: str):
     Detect reply language from user message using AI so we can force the same language in the reply.
     Returns 'ru', 'uz', 'en', or None (use profile language) on empty input or API failure.
     """
+    snippet = (text or '')[:80].replace('\n', ' ')
     if not text or not isinstance(text, str):
+        print(f"[LANG] detect_reply_lang: no text")
+        logger.info("[LANG] detect_reply_lang: no text")
         return None
     t = text.strip()
     if not t or t == '[Sticker]' or t.startswith('[FILE:'):
+        print(f"[LANG] detect_reply_lang: skip (sticker/file/empty)")
+        logger.info("[LANG] detect_reply_lang: skip (sticker/file/empty)")
         return None
 
     client = get_openai_client()
     if not client:
+        print(f"[LANG] detect_reply_lang: no OpenAI client")
+        logger.info("[LANG] detect_reply_lang: no OpenAI client")
         return None
     if not _check_rate_limit():
+        print(f"[LANG] detect_reply_lang: rate limit")
+        logger.info("[LANG] detect_reply_lang: rate limit")
         return None
 
     try:
         response = client.chat.completions.create(
             model='gpt-4o-mini',
             messages=[
-                {'role': 'system', 'content': 'You detect the language of the user message. Reply with exactly one word: ru (Russian), uz (Uzbek), or en (English). No other text.'},
+                {'role': 'system', 'content': 'You detect the language of the user message. Reply with exactly one word: ru (Russian), uz (Uzbek), or en (English). Uzbek can be written in Latin or Cyrillic script; do not assume Cyrillic is always Russian. No other text.'},
                 {'role': 'user', 'content': t[:1000]}
             ],
             max_tokens=5,
@@ -316,10 +329,12 @@ def detect_reply_lang(text: str):
         if response.usage:
             _track_usage(response.usage.total_tokens)
         code = (raw.split()[0] if raw else '').rstrip('.,;:')
-        if code in ('ru', 'uz', 'en'):
-            return code
-        return None
+        result = code if code in ('ru', 'uz', 'en') else None
+        print(f"[LANG] detect_reply_lang: input={snippet!r} -> raw={raw!r} code={code!r} -> result={result}")
+        logger.info(f"[LANG] detect_reply_lang: input={snippet!r} -> raw={raw!r} code={code!r} -> result={result}")
+        return result
     except Exception as e:
+        print(f"[LANG] detect_reply_lang: FAILED input={snippet!r} error={e}")
         logger.warning(f"Language detection failed: {e}")
         _track_usage(error=True)
         return None
@@ -539,15 +554,32 @@ def get_ai_response(message: str, conversation_history: list = None, service: st
     client = get_openai_client()
     if not client:
         return None
-    
+
+    msg_snippet = (message or '')[:80].replace('\n', ' ')
+    print(f"[AI] get_ai_response: message={msg_snippet!r} service={service!r} profile_lang={lang!r}")
+    logger.info(f"[AI] get_ai_response: message={msg_snippet!r} service={service!r} profile_lang={lang!r}")
+
     # Reply in the same language as the user's message (overrides profile when detectable)
     effective_lang = detect_reply_lang(message) or lang
+    inject_dont_ask = bool(service and service != 'general')
+    print(f"[AI] get_ai_response: effective_lang={effective_lang!r} inject_dont_ask={inject_dont_ask}")
+    logger.info(f"[AI] get_ai_response: effective_lang={effective_lang!r} inject_dont_ask={inject_dont_ask}")
+
     # Build system prompt
     system_prompt = build_system_prompt(service or 'general', effective_lang)
     # When we already know the service, tell the model not to ask again
-    if service and service != 'general':
+    if inject_dont_ask:
         system_prompt += "\n\nThe user has already stated they need this service. Do NOT ask what service they need. Start by acknowledging and asking the first question or document for this service."
-    
+        print(f"[AI] get_ai_response: appended 'don't ask again' line")
+        logger.info("[AI] get_ai_response: appended don't ask again line")
+
+    # Log that target language is in prompt (sanity check)
+    if f"reply ONLY in " in system_prompt:
+        logger.info("[AI] get_ai_response: system prompt contains 'reply ONLY in' (target lang)")
+    else:
+        print(f"[AI] get_ai_response: WARNING system prompt may not contain 'reply ONLY in'")
+        logger.warning("[AI] get_ai_response: system prompt may not contain 'reply ONLY in'")
+
     # Prepare messages
     messages = [{'role': 'system', 'content': system_prompt}]
     
@@ -628,6 +660,10 @@ def ask_ai(conversation: list, service: str, lang: str = 'en', max_tokens: int =
             if msg.get('role') == 'user' and _is_substantive_text(msg.get('content', '')):
                 last_message = msg.get('content', '')
                 break
+
+    last_snippet = (last_message or '')[:80].replace('\n', ' ')
+    print(f"[AI] ask_ai: conv_len={len(conversation or [])} last_message={last_snippet!r} service={service!r} lang={lang!r}")
+    logger.info(f"[AI] ask_ai: conv_len={len(conversation or [])} last_message={last_snippet!r} service={service!r} lang={lang!r}")
 
     return get_ai_response(
         message=last_message or '',
