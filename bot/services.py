@@ -586,9 +586,9 @@ def get_ai_response(message: str, conversation_history: list = None, service: st
     # Prepare messages
     messages = [{'role': 'system', 'content': system_prompt}]
     
-    # Add conversation history (limited to last 20 messages)
+    # Add full conversation thread (ChatGPT-style) so the model knows what was already collected; cap at 500 for context limit safety
     if conversation_history:
-        for msg in conversation_history[-20:]:
+        for msg in conversation_history[-500:]:
             role = msg.get('role', 'user')
             # Map non-standard roles to assistant
             if role not in ['user', 'assistant', 'system']:
