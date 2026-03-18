@@ -44,12 +44,13 @@ def check_admin_login(username, password):
     """
     from core.models import AdminUser
     
-    # Check .env master credentials first
-    env_username = getattr(settings, 'ADMIN_USERNAME', '')
-    env_password = getattr(settings, 'ADMIN_PASSWORD', '')
-    
-    if username == env_username and password == env_password:
-        return (True, 'master', None, 'Master Admin')
+    # Check .env master credentials (ADMIN_* and MASTER2_*)
+    for env_user, env_pass, display in [
+        (getattr(settings, 'ADMIN_USERNAME', ''), getattr(settings, 'ADMIN_PASSWORD', ''), 'Master Admin'),
+        (getattr(settings, 'MASTER2_USERNAME', ''), getattr(settings, 'MASTER2_PASSWORD', ''), getattr(settings, 'MASTER2_DISPLAY', 'Master Admin')),
+    ]:
+        if env_user and username == env_user and password == env_pass:
+            return (True, 'master', None, display)
     
     # Check database AdminUser
     try:
