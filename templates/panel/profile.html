@@ -14,7 +14,7 @@
                     <label for="display_name">Display name</label>
                     <input type="text" id="display_name" name="display_name" class="form-input" value="{{ current_display_name|default:'' }}" placeholder="How your name appears in the panel">
                 </div>
-                {% if not is_master %}
+                {% if admin_user %}
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" class="form-input" value="{{ current_username|default:'' }}" required placeholder="Login username">
@@ -31,7 +31,7 @@
                     <label for="password">New password (leave blank to keep current)</label>
                     <input type="password" id="password" name="password" class="form-input" autocomplete="new-password" minlength="6" placeholder="Min 6 characters">
                 </div>
-                {% else %}
+                {% elif is_master %}
                 <p class="profile-master-note">You are signed in as Master Admin. Username and password are set in environment; only display name and theme are stored in this session.</p>
                 {% endif %}
             </div>
