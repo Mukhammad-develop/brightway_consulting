@@ -98,6 +98,8 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 TG_API_ID = os.getenv('TG_API_ID', '')
 TG_API_HASH = os.getenv('TG_API_HASH', '')
 TG_PHONE = os.getenv('TG_PHONE', '')
+TG_API_ID_2 = os.getenv('TG_API_ID_2', '')
+TG_API_HASH_2 = os.getenv('TG_API_HASH_2', '')
 TG_PHONE_2 = os.getenv('TG_PHONE_2', '')
 
 # Admin credentials from .env

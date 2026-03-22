@@ -71,6 +71,9 @@ def _phone_val(name: str):
 API_ID = getattr(settings, 'TG_API_ID', None) or os.getenv('TG_API_ID')
 API_HASH = getattr(settings, 'TG_API_HASH', None) or os.getenv('TG_API_HASH')
 PHONE = _phone_val('TG_PHONE')
+
+API_ID_2 = getattr(settings, 'TG_API_ID_2', None) or os.getenv('TG_API_ID_2')
+API_HASH_2 = getattr(settings, 'TG_API_HASH_2', None) or os.getenv('TG_API_HASH_2')
 PHONE_2 = _phone_val('TG_PHONE_2')
 
 # Thread pool for sync ORM operations
@@ -698,42 +701,44 @@ async def send_queue_loop(clients: list):
             logger.error(f"Error in send queue loop: {e}")
 
 
-async def import_queue_loop(client: TelegramClient):
-    """Process import requests."""
+async def import_queue_loop(clients: list):
+    """Process import requests using the first available client."""
     from core.models import ImportRequest
-    
+
     while True:
         try:
             await asyncio.sleep(5)
-            
-            # Get pending imports
+
+            # Pick first connected client
+            active_client = next((c for c in clients if c is not None), None)
+            if active_client is None:
+                continue
+
             def get_pending():
                 return list(ImportRequest.objects.filter(status='pending')[:5])
-            
+
             pending = await run_sync(get_pending)
-            
+
             for req in pending:
                 try:
-                    # Mark as processing
                     def mark_processing():
                         req.status = 'processing'
                         req.save(update_fields=['status'])
-                    
+
                     await run_sync(mark_processing)
-                    
-                    # Process import
-                    await process_import(client, req.pk, req.user_tg_id)
-                    
+
+                    await process_import(active_client, req.pk, req.user_tg_id)
+
                 except Exception as e:
                     logger.error(f"Error processing import {req.pk}: {e}")
-                    
+
                     def mark_error():
                         req.status = 'error'
                         req.error_msg = str(e)
                         req.save(update_fields=['status', 'error_msg'])
-                    
+
                     await run_sync(mark_error)
-        
+
         except Exception as e:
             logger.error(f"Error in import queue loop: {e}")
 
@@ -938,12 +943,14 @@ async def main():
     )
     
     client2 = None
-    if PHONE_2 and len(PHONE_2) > 5:  # must look like a phone (e.g. +44...)
+    if PHONE_2 and len(PHONE_2) > 5 and API_ID_2 and API_HASH_2:
         client2 = TelegramClient(
             str(SESSIONS_DIR / 'userbot2'),
-            int(API_ID),
-            API_HASH
+            int(API_ID_2),
+            API_HASH_2
         )
+    elif PHONE_2 and len(PHONE_2) > 5:
+        logger.error("Account 2 phone is set but TG_API_ID_2 / TG_API_HASH_2 are missing in .env — skipping account 2")
     
     try:
         # Connect client 1 (uses existing session)
@@ -973,13 +980,17 @@ async def main():
         # Start background tasks
         tasks = [
             asyncio.create_task(send_queue_loop(ACTIVE_CLIENTS)),
-            asyncio.create_task(import_queue_loop(client1)),
+            asyncio.create_task(import_queue_loop(ACTIVE_CLIENTS)),
         ]
-        
+
         logger.info("Userbot running...")
-        
-        # Run until disconnected
-        await client1.run_until_disconnected()
+
+        # Run all connected clients concurrently; stop when all disconnect
+        run_tasks = [
+            asyncio.create_task(c.run_until_disconnected())
+            for c in ACTIVE_CLIENTS if c is not None
+        ]
+        await asyncio.gather(*run_tasks)
         
     except Exception as e:
         logger.error("Userbot error: %s", e)
@@ -998,18 +1009,30 @@ def authenticate(account: int = 1):
         print("Error: TG_API_ID and TG_API_HASH must be configured in .env")
         return
     
-    phone = PHONE if account == 1 else PHONE_2
-    session_name = 'userbot' if account == 1 else 'userbot2'
-    
+    if account == 1:
+        phone = PHONE
+        session_name = 'userbot'
+        api_id = API_ID
+        api_hash = API_HASH
+    else:
+        phone = PHONE_2
+        session_name = 'userbot2'
+        api_id = API_ID_2
+        api_hash = API_HASH_2
+
     if not phone:
         print(f"Error: TG_PHONE{'_2' if account == 2 else ''} must be configured in .env")
         return
-    
+
+    if not api_id or not api_hash:
+        print(f"Error: TG_API_ID{'_2' if account == 2 else ''} and TG_API_HASH{'_2' if account == 2 else ''} must be configured in .env")
+        return
+
     async def auth():
         client = TelegramClient(
             str(SESSIONS_DIR / session_name),
-            int(API_ID),
-            API_HASH
+            int(api_id),
+            api_hash
         )
         
         await client.start(phone=phone)

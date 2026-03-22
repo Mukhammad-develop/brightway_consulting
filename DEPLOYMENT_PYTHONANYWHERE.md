@@ -84,28 +84,9 @@ mkdir -p uploads
 2. **Code** section:
    - **Source code**: `/home/yourusername/brightway_consulting`
    - **Working directory**: `/home/yourusername/brightway_consulting`
-   - **WSGI configuration file**: set to `/home/yourusername/brightway_consulting/bwc/wsgi.py` (the project’s WSGI file).
+   - **WSGI configuration file**: `/home/yourusername/brightway_consulting/bwc/wsgi.py` (use the project’s WSGI file from the repo; do not use the random file PythonAnywhere creates under `/var/www/`).
 
-   If you prefer to use the default WSGI file PythonAnywhere created, open it and replace its contents with:
-
-```python
-# Replace yourusername with your PythonAnywhere username
-import sys
-import os
-
-path = '/home/yourusername/brightway_consulting'
-if path not in sys.path:
-    sys.path.insert(0, path)
-
-os.environ['DJANGO_SETTINGS_MODULE'] = 'bwc.settings'
-
-from django.core.wsgi import get_wsgi_application
-application = get_wsgi_application()
-```
-
-   Save.
-
-4. **Static files** (scroll down):  
+3. **Static files** (scroll down):  
    You need **two** mappings. Use your real username instead of `yourusername`.
    - **URL**: `/static/`  
      **Directory**: `/home/yourusername/brightway_consulting/staticfiles`  
