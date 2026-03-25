@@ -50,35 +50,6 @@
                 
                 <div class="profile-details">
                     <div class="detail-row">
-                        <span class="detail-label">Assigned to</span>
-                        <span class="detail-value">
-                            {% if assigned_admin %}
-                                {{ assigned_admin.display_name|default:assigned_admin.username }} <span class="muted">({{ assigned_admin.role }})</span>
-                            {% else %}
-                                -
-                            {% endif %}
-                        </span>
-                    </div>
-                    {% if is_elevated and active_case %}
-                    <div class="detail-row">
-                        <span class="detail-label">Change</span>
-                        <span class="detail-value">
-                            <form method="post" action="{% url 'panel:user_reassign' user_obj.pk %}" class="assign-form">
-                                {% csrf_token %}
-                                <select name="assigned_to" class="form-select form-select-sm">
-                                    <option value="">— Unassigned —</option>
-                                    {% for a in assignee_options %}
-                                    <option value="{{ a.pk }}" {% if assigned_admin and assigned_admin.pk == a.pk %}selected{% endif %}>
-                                        {{ a.display_name|default:a.username }} ({{ a.role }})
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                                <button type="submit" class="btn btn-xs btn-outline">Save</button>
-                            </form>
-                        </span>
-                    </div>
-                    {% endif %}
-                    <div class="detail-row">
                         <span class="detail-label">Phone</span>
                         <span class="detail-value">{{ user_obj.phone|default:"-" }}</span>
                     </div>
@@ -130,6 +101,38 @@
                     <p class="ai-timestamp">Last updated: {{ ai_profile.updated_at|date:"M d, Y H:i" }}</p>
                 </div>
                 {% endif %}
+
+                <div class="profile-details" style="margin-top: 1rem;">
+                    <div class="detail-row">
+                        <span class="detail-label">Assigned to</span>
+                        <span class="detail-value">
+                            {% if assigned_admin %}
+                                {{ assigned_admin.display_name|default:assigned_admin.username }} <span class="muted">({{ assigned_admin.role }})</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </span>
+                    </div>
+                    {% if is_elevated and active_case %}
+                    <div class="detail-row">
+                        <span class="detail-label">Change</span>
+                        <span class="detail-value">
+                            <form method="post" action="{% url 'panel:user_reassign' user_obj.pk %}" class="assign-form">
+                                {% csrf_token %}
+                                <select name="assigned_to" class="form-select form-select-sm">
+                                    <option value="">— Unassigned —</option>
+                                    {% for a in assignee_options %}
+                                    <option value="{{ a.pk }}" {% if assigned_admin and assigned_admin.pk == a.pk %}selected{% endif %}>
+                                        {{ a.display_name|default:a.username }} ({{ a.role }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-xs btn-outline">Save</button>
+                            </form>
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
         
