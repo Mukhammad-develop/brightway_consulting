@@ -676,16 +676,8 @@ def handle_voice_message(message):
             if response:
                 bot.send_message(message.chat.id, response)
         else:
-            # Transcription failed — AI sees the [FILE:...] tag and handles it
-            stop_typing = threading.Event()
-            typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
-            typing_thread.start()
-            try:
-                response, _ = process_ai_response(user, case, '', lang)
-            finally:
-                stop_typing.set()
-            if response:
-                bot.send_message(message.chat.id, response)
+            # Both APIs failed — ask the user to type instead
+            bot.send_message(message.chat.id, t(lang, 'voice_ask_type'))
         
         logger.info(f"Voice message from {user.telegram_id}: {filename}")
         

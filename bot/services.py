@@ -632,20 +632,100 @@ def _transcribe_via_muxlisa(file_path: Path) -> str:
                 pass
 
 
+def _transcribe_via_whisper(file_path: Path, lang_code: str = '') -> str:
+    """
+    Transcribe audio using OpenAI Whisper-1.
+    Returns transcribed text or None on error.
+    """
+    client = get_openai_client()
+    if not client:
+        return None
+
+    supported_formats = {'.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'}
+    file_ext = file_path.suffix.lower()
+
+    temp_file = None
+    work_path = file_path
+    if file_ext in {'.ogg', '.oga', '.opus'}:
+        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        temp_file.close()
+        converted = convert_audio(str(file_path), temp_file.name)
+        if not converted:
+            logger.error(f"Whisper: failed to convert {file_ext} to WAV")
+            return None
+        work_path = Path(converted)
+    elif file_ext not in supported_formats:
+        logger.error(f"Whisper: unsupported audio format: {file_ext}")
+        return None
+
+    try:
+        start_time = time.time()
+        with open(work_path, 'rb') as audio_file:
+            kwargs = {'model': 'whisper-1', 'file': audio_file}
+            lang_map = {'en': 'en', 'ru': 'ru'}
+            whisper_lang = lang_map.get(lang_code)
+            if whisper_lang:
+                kwargs['language'] = whisper_lang
+            response = client.audio.transcriptions.create(**kwargs)
+        response_time = time.time() - start_time
+        _track_usage(response_time=response_time)
+        transcription = response.text if hasattr(response, 'text') else str(response)
+        logger.info(f"Whisper STT ({response_time:.2f}s): {transcription[:60]}...")
+        return transcription or None
+    except Exception as e:
+        logger.error(f"Whisper transcription error: {e}")
+        _track_usage(error=True)
+        return None
+    finally:
+        if temp_file and Path(temp_file.name).exists():
+            try:
+                os.unlink(temp_file.name)
+            except Exception:
+                pass
+
+
+# Common Uzbek word/pattern fragments used to validate Uzbek transcription results
+_UZ_PATTERNS = frozenset([
+    'men', 'sen', 'biz', 'siz', 'ular', 'bu', 'va', 'ham', 'bir',
+    'uchun', 'bilan', 'kerak', 'qil', 'emas', 'ha', 'yo', 'nima',
+    'qanday', 'hozir', 'lekin', 'agar', 'yoq', "yo'q", 'ish', 'uy',
+    'viza', 'soliq', 'talaba', 'pul', 'xat', 'hujjat',
+    "o'z", "o'g", 'sh', 'ch', 'ng',
+])
+
+
+def _looks_sensible(text: str, expected_lang: str) -> bool:
+    """
+    Heuristic: does this transcription result look plausible for the expected language?
+
+    - Any lang: must have at least 2 words.
+    - Uzbek expected: result must contain at least one recognisable Uzbek
+      word/pattern, otherwise it is likely Whisper hallucinating English.
+    """
+    if not text or not text.strip():
+        return False
+    words = text.strip().split()
+    if len(words) < 2:
+        return False
+    if expected_lang == 'uz':
+        low = text.lower()
+        return any(p in low for p in _UZ_PATTERNS)
+    return True
+
+
 def transcribe_voice(file_path: str, language_hint: str = None) -> str:
     """
-    Transcribe voice/audio file.
+    Transcribe voice/audio with smart primary/fallback routing.
 
-    Routing:
-      - Uzbek (uz): Muxlisa AI STT API
-      - English / Russian / unknown: OpenAI Whisper-1
-    
-    Args:
-        file_path: Path to audio file
-        language_hint: Optional language hint (ISO 639-1 code)
-        
+    Routing (based on user's chat language):
+      uz / unknown → Muxlisa primary, Whisper fallback
+      en / ru      → Whisper primary, Muxlisa fallback
+
+    After each attempt a sensibility check is run.  If both APIs produce
+    bad results, None is returned — callers should ask the user to type.
+
     Returns:
-        Transcribed text or None on error
+        Transcribed text, or None if all attempts fail.
     """
     file_path = Path(file_path)
     if not file_path.exists():
@@ -654,69 +734,30 @@ def transcribe_voice(file_path: str, language_hint: str = None) -> str:
 
     lang_code = (language_hint or '')[:2].lower()
 
-    # --- Uzbek: use Muxlisa AI ---
-    if lang_code == 'uz':
-        logger.info(f"Routing Uzbek voice to Muxlisa STT: {file_path.name}")
-        return _transcribe_via_muxlisa(file_path)
+    if lang_code in ('en', 'ru'):
+        attempts = [
+            ('Whisper',  lambda: _transcribe_via_whisper(file_path, lang_code)),
+            ('Muxlisa',  lambda: _transcribe_via_muxlisa(file_path)),
+        ]
+    else:
+        # uz or unknown — Muxlisa first (most users are Uzbek)
+        attempts = [
+            ('Muxlisa',  lambda: _transcribe_via_muxlisa(file_path)),
+            ('Whisper',  lambda: _transcribe_via_whisper(file_path, lang_code)),
+        ]
 
-    # --- English / Russian / other: OpenAI Whisper-1 ---
-    client = get_openai_client()
-    if not client:
-        return None
+    for name, fn in attempts:
+        result = fn()
+        if result and _looks_sensible(result, lang_code):
+            logger.info(f"[STT] {name} accepted: {result[:60]!r}")
+            return result
+        if result:
+            logger.info(f"[STT] {name} result didn't pass sensibility check ({result[:60]!r}), trying next")
+        else:
+            logger.info(f"[STT] {name} returned nothing, trying next")
 
-    # Whisper-1 supported formats
-    supported_formats = {'.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'}
-    file_ext = file_path.suffix.lower()
-
-    temp_file = None
-    if file_ext in {'.ogg', '.oga', '.opus'}:
-        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-        temp_file.close()
-        converted_path = convert_audio(str(file_path), temp_file.name)
-        if not converted_path:
-            logger.error(f"Failed to convert {file_ext} to WAV")
-            return None
-        file_path = Path(converted_path)
-    elif file_ext not in supported_formats:
-        logger.error(f"Unsupported audio format: {file_ext}")
-        return None
-
-    try:
-        start_time = time.time()
-
-        with open(file_path, 'rb') as audio_file:
-            kwargs = {
-                'model': 'whisper-1',
-                'file': audio_file,
-            }
-
-            if lang_code:
-                lang_map = {'en': 'en', 'ru': 'ru'}
-                whisper_lang = lang_map.get(lang_code)
-                if whisper_lang:
-                    kwargs['language'] = whisper_lang
-
-            response = client.audio.transcriptions.create(**kwargs)
-
-        response_time = time.time() - start_time
-        _track_usage(response_time=response_time)
-
-        transcription = response.text if hasattr(response, 'text') else str(response)
-        logger.info(f"Whisper STT ({response_time:.2f}s): {transcription[:50]}...")
-
-        return transcription
-
-    except Exception as e:
-        logger.error(f"Transcription error: {e}")
-        _track_usage(error=True)
-        return None
-
-    finally:
-        if temp_file and Path(temp_file.name).exists():
-            try:
-                os.unlink(temp_file.name)
-            except Exception:
-                pass
+    logger.warning("[STT] All transcription attempts failed — asking user to type")
+    return None
 
 
 def transcribe_document(doc_id: int) -> str:

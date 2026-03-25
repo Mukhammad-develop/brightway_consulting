@@ -632,7 +632,10 @@ def register_handlers(client: TelegramClient, account_index: int):
                     await run_sync(lambda: _add_message_to_case(
                         case.pk, 'user', f"[Voice message]: {transcription}"
                     ))
-                # If transcription failed, AI still sees [FILE:...:voice] and can respond
+                else:
+                    # Both APIs failed — ask the user to type instead
+                    await event.respond(t(lang, 'voice_ask_type'))
+                    return
             else:
                 # Acknowledge non-voice media (photos, documents)
                 await event.respond(t(lang, msg_key))

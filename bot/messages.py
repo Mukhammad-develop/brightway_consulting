@@ -67,6 +67,8 @@ Created: {created}""",
 
         'processing': "Processing your request...",
 
+        'voice_ask_type': "Sorry, I couldn't understand your voice message. Could you please type your message instead?",
+
         'consultant_will_reply': "A consultant will reply to you shortly. Thank you for your message.",
 
         'error_general': "Something went wrong. Please try again later.",
@@ -142,6 +144,8 @@ Created: {created}""",
 
         'processing': "Обрабатываю ваш запрос...",
 
+        'voice_ask_type': "Извините, не удалось распознать голосовое сообщение. Пожалуйста, напишите текстом.",
+
         'consultant_will_reply': "Консультант ответит вам в ближайшее время. Спасибо за ваше сообщение.",
 
         'error_general': "Что-то пошло не так. Попробуйте позже.",
@@ -216,6 +220,8 @@ Yaratilgan: {created}""",
         'contact_received': "Kontakt ma'lumotlari uchun rahmat!",
 
         'processing': "So'rovingiz qayta ishlanmoqda...",
+
+        'voice_ask_type': "Kechirasiz, ovozli xabarni tushuna olmadim. Iltimos, matn yozib yuboring.",
 
         'consultant_will_reply': "Konsultant tez orada sizga javob beradi. Xabaringiz uchun rahmat.",
 
