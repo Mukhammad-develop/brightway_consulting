@@ -50,98 +50,8 @@ _rate_limit = {
     'last_calls': [],  # timestamps of recent calls
 }
 
-# Hardcoded service info (fallback)
-SERVICE_INFO = {
-    'student': {
-        'collect_items': ['Full name', 'Passport number', 'Date of birth', 'University name', 'Course details', 'CAS number'],
-        'documents': ['Passport scan', 'University acceptance letter', 'Financial documents', 'English test results']
-    },
-    'paye': {
-        'collect_items': ['Full name', 'National Insurance number', 'Tax years', 'Employer details', 'Email and phone', 'Address outside UK (Uzb/KZ/KGZ/TJK)', 'Sort code and account number', 'How many times have you come to work (nechinchi bor kelishingiz ishga?)'],
-        'documents': ['P45 (PDF / fayli shaklida)', 'Passport (rasm / scaner qilib)', 'Address outside UK - Uzb/KZ/KGZ/TJK', 'National Insurance number', 'Email and phone', 'Card details - Sort code and account number (Angliya kartangizdan)', 'Nechinchi bor kelishingiz ishga?'],
-        'strict_flow': True
-    },
-    'schengen': {
-        'collect_items': ['Full name', 'Passport number', 'Sharecode', 'Evisa', 'Yashash manzili (address)', "O'qish yoki ish joyidan malumotnoma", 'Email', 'Phone number', 'Full-time payslip if applicable', 'Last 3 months bank statement'],
-        'documents': ['Passport', 'Sharecode', 'Evisa', 'Yashash manzili', "O'qish yoki ish joyidan malumotnoma", 'Email', 'Phone number', 'Photo 3.5×4.5', 'Payslip (if full-time)', 'Bank statement – last 3 months (ohirgi 3 oylik)'],
-    },
-    'self': {
-        'collect_items': ['Full name', 'UTR number', 'Tax year', 'Income sources', 'Expenses'],
-        'documents': ['ID document', 'Bank statements', 'Income records', 'Expense receipts']
-    },
-    'company': {
-        'collect_items': ['Company name', 'Company number', 'Director details', 'VAT registration'],
-        'documents': ['Certificate of incorporation', 'Bank statements', 'Invoices', 'Receipts']
-    }
-}
-
-# Tone rules for AI
-TONE_RULES = """
-TONE RULES:
-- Sound like a real consultant in a live chat, not a formal letter
-- Be friendly but professional; be nice and welcoming to the user
-- At the start of the conversation, mention that you're glad they contacted Brightway Consulting (e.g. "Рады, что вы обратились в Brightway Consulting!" / "Glad you're here at Brightway Consulting!" / same in Uzbek)
-- Use emojis sometimes — not a lot, one or two per message when it fits (e.g. 👋 at greeting, ✅ when you got something). Don't overdo it
-- Use natural conversational language
-- Keep responses concise but helpful
-- Ask one question at a time
-- Acknowledge what the user says before asking for more
-"""
-
-# Anti-bot patterns
-ANTI_BOT_PATTERNS = """
-AVOID THESE PATTERNS:
-- Don't say "Great!", "Absolutely!", "Certainly!"
-- Don't say "Kindly provide..."
-- Don't use overly formal phrases
-- Don't repeat the same greeting structure
-- Don't use numbered lists for simple questions
-"""
-
-# Style examples
-STYLE_EXAMPLES = """
-GOOD EXAMPLES:
-EN: "Got it! And what's your passport number?"
-EN: "Thanks for that. Do you have a copy of your P45?"
-RU: "Понял! А какой у вас номер паспорта?"
-UZ: "Tushundim! Pasport raqamingiz qanday?"
-UZ (natural): "Yaxshi, tushundim. To'liq ismingizni yozib bering." / "Rahmat. Endi P45 nusxangiz bormi?"
-"""
-
-# Natural language for Uzbek and Russian
-NATURAL_LANGUAGE = """
-When replying in Uzbek or Russian, sound natural and conversational:
-- Use everyday spoken language, as in a friendly chat or text message. Avoid stiff, formal, or textbook phrases.
-- In Uzbek: avoid overly formal wording like "Avvalambor", "Sizdan bir nechta ma'lumot kerak bo'ladi" – prefer shorter, natural phrases (e.g. "Ismingiz nima?", "Ma'lumotlaringizni yozing").
-- In Russian: same – use normal spoken Russian, not official or translated tone.
-- Match how a real consultant would text a client in that language, not a formal letter or machine translation.
-"""
-
 # Marker in AI response when info collection is complete and user should be assigned to a consultant
 READY_FOR_CONSULTANT_MARKER = '[READY_FOR_CONSULTANT]'
-
-# Behavior: collect information then assign to consultant
-COLLECT_AND_ASSIGN_BEHAVIOR = """
-YOUR ROLE:
-- You are an assistant for Brightway Consulting. Your job is to collect the information and documents we need for the user's service, then assign them to a human consultant.
-- At the start of the conversation (or when the user chooses a service), briefly state: you will collect the required information and then assign them to a consultant who will take over.
-- Collect information and documents step by step: ask for one thing at a time, acknowledge what they provide, then ask for the next. Use the "Information to collect" and "Documents to request" lists above as your checklist.
-- When you have collected ALL required information and documents listed for this service, end your reply with exactly """ + READY_FOR_CONSULTANT_MARKER + """ (on its own line, no other text after it). Before that line you may say e.g. "I have everything I need. I'm assigning you to a consultant who will contact you shortly."
-- Do NOT output """ + READY_FOR_CONSULTANT_MARKER + """ until you have collected every required item and document.
-"""
-
-# General system prompt
-GENERAL_SYSTEM_PROMPT = """You are a helpful AI assistant for Brightway Consulting, a UK-based consultancy 
-that helps with student visas, tax refunds, and company accounting.
-
-Your job is to:
-1. Understand what service the user needs
-2. Collect necessary information and documents (step by step)
-3. When collection is complete, assign them to a consultant (end your message with """ + READY_FOR_CONSULTANT_MARKER + """)
-4. Be helpful and professional
-
-If you can't determine what service they need, ask clarifying questions.
-"""
 
 
 # ============== OpenAI Client Management ==============
@@ -231,17 +141,43 @@ def ai_detect_service(text: str, conversation_history: list = None) -> str:
     if not client:
         return None
     
-    # Allow master/admin to override classifier prompt from DB
+    # Prefer dynamic classifier built from DB services (so admin changes take effect)
     system_prompt = None
     try:
-        from core.models import AiSettings
+        from core.models import ServiceDefinition, AiSettings
+        services = list(ServiceDefinition.objects.filter(is_active=True).order_by('display_order', 'name'))
+
+        # Optional override prompt from DB (highest priority)
         s = AiSettings.objects.order_by('-updated_at').first()
-        if s and (s.service_classifier_prompt or '').strip():
-            system_prompt = (s.service_classifier_prompt or '').strip()
+        override = (getattr(s, 'service_classifier_prompt', '') or '').strip() if s else ''
+        if override:
+            system_prompt = override
+        elif services:
+            lines = []
+            lines.append("You are a service classifier for Brightway Consulting.")
+            lines.append("Based on the user's message, choose exactly ONE service slug from the list below.")
+            lines.append("Respond with ONLY the slug (one word). No extra text.")
+            lines.append("")
+            lines.append("SERVICES:")
+            for svc in services:
+                kw = (svc.get_keywords_list() or [])
+                kw_preview = ", ".join(kw[:20])
+                label = (svc.name or svc.slug)
+                if kw_preview:
+                    lines.append(f'- "{svc.slug}" — {label}. Keywords: {kw_preview}')
+                else:
+                    lines.append(f'- "{svc.slug}" — {label}.')
+            lines.append('- "general" — general inquiry / unclear / not matching any service above.')
+            lines.append("")
+            lines.append("Rules:")
+            lines.append("- The user may write in English, Russian, or Uzbek.")
+            lines.append("- If unsure, respond with general.")
+            system_prompt = "\n".join(lines)
     except Exception:
         system_prompt = None
 
     if not system_prompt:
+        # Fallback hardcoded classifier (safe default)
         system_prompt = """You are a service classifier for a UK consulting firm.
 Based on the user message, determine which service they need:
 - "student" - Student visa, university applications, educational guidance
@@ -366,7 +302,7 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
     Returns:
         Complete system prompt string
     """
-    from core.models import ServiceDefinition
+    from core.models import ServiceDefinition, AiSettings
     
     lang_map = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}
     target_lang = lang_map.get(lang, 'English')
@@ -378,171 +314,53 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
     except Exception as e:
         logger.error(f"Error loading service definition: {e}")
     
-    if svc_def and svc_def.ai_system_prompt:
-        # Use custom AI system prompt from database
-        if svc_def.ai_strict_flow:
-            # Strict flow - use prompt as-is
-            base_prompt = svc_def.ai_system_prompt
-        else:
-            # Flexible flow - append collect items and documents
-            base_prompt = svc_def.ai_system_prompt
-            
+    ai_settings = None
+    try:
+        ai_settings = AiSettings.objects.order_by('-updated_at').first() or AiSettings.objects.get(pk=1)
+    except Exception:
+        ai_settings = None
+
+    if svc_def and (svc_def.ai_system_prompt or '').strip():
+        base_prompt = (svc_def.ai_system_prompt or '').strip()
+        if not svc_def.ai_strict_flow:
             collect_items = svc_def.get_collect_items()
             if collect_items:
-                base_prompt += f"\n\nInformation to collect:\n" + "\n".join(f"- {item}" for item in collect_items)
-            
+                base_prompt += "\n\nInformation to collect:\n" + "\n".join(f"- {item}" for item in collect_items)
+
             documents = svc_def.get_documents_list()
             if documents:
-                base_prompt += f"\n\nDocuments to request:\n" + "\n".join(f"- {doc}" for doc in documents)
+                base_prompt += "\n\nDocuments to request:\n" + "\n".join(f"- {doc}" for doc in documents)
     else:
-        # Fallback to hardcoded prompts
-        base_prompt = _build_hardcoded_prompt(service)
+        # No per-service prompt configured: use global general prompt from DB
+        base_prompt = ((getattr(ai_settings, 'general_system_prompt', '') or '').strip() if ai_settings else '').strip()
     
-    # Append collect-then-assign behavior (for non-general services) and common rules
     if service and service != 'general':
-        base_prompt = base_prompt.rstrip() + "\n\n" + COLLECT_AND_ASSIGN_BEHAVIOR
-    # Append common rules
-    full_prompt = f"""{base_prompt}
+        behavior = ((getattr(ai_settings, 'collect_and_assign_behavior', '') or '').strip() if ai_settings else '').strip()
+        if behavior:
+            base_prompt = base_prompt.rstrip() + "\n\n" + behavior
 
-{TONE_RULES}
+    tone = ((getattr(ai_settings, 'tone_rules', '') or '').strip() if ai_settings else '').strip()
+    anti = ((getattr(ai_settings, 'anti_bot_patterns', '') or '').strip() if ai_settings else '').strip()
+    examples = ((getattr(ai_settings, 'style_examples', '') or '').strip() if ai_settings else '').strip()
+    natural = ((getattr(ai_settings, 'natural_language_rules', '') or '').strip() if ai_settings else '').strip()
+    common = ((getattr(ai_settings, 'common_rules', '') or '').strip() if ai_settings else '').strip()
 
-{ANTI_BOT_PATTERNS}
-
-{STYLE_EXAMPLES}
-
-CRITICAL – Language: You MUST reply in the same language as the user's last message. If the user wrote in Russian (e.g. Привет, мне нужна помощь), reply ONLY in Russian. If they wrote in Uzbek, reply ONLY in Uzbek. If they wrote in English, reply in English. Never reply in English when the user wrote in Russian or Uzbek. Check the user's message: Russian uses Cyrillic (Привет, как, виза); Uzbek may use Latin (Salom, yordam) or Cyrillic. Match it.
-Do NOT change language based on the user's name. Many people have Uzbek or Central Asian names but speak only Russian (e.g. born in Russia). Keep replying in the language the user has been writing in; do not switch to Uzbek just because their name looks Uzbek.
-
-{NATURAL_LANGUAGE}
-
-Respond to the user's actual last message. If their message is normal text (e.g. a question or request in any language), answer that text.
-If the user has ALREADY said they need visa, tax refund, or accounting (e.g. "мне нужна помощь по визе", "help with visa", "tax refund", "виза", "налог", "бухгалтерия") — do NOT ask again "what do you need?" or "visa, tax or accounting?". Acknowledge their request and start collecting information for that service immediately (e.g. ask for their full name or first doc). Only ask "what service do you need?" when they have NOT mentioned visa, tax, or accounting (e.g. only "Привет" or "Hello").
-When the user's message is exactly "[Sticker]" (they sent a sticker only): do NOT say "it seems you sent a sticker", "you sent a sticker", or similar. Instead reply briefly asking them to type what they need (e.g. Schengen visa, tax refund, accounting) so you can help. When the user sent plain text, do not refer to stickers.
-
-When the user has just sent a file (photo, document, voice, video), you may suggest a short filename so we can label it. If you can infer what the file is (e.g. passport, id_front, receipt, p60), end your message with a line: FILENAME: label (e.g. FILENAME: passport or FILENAME: id_front). Use one or two words, no path and no extension. If unsure, omit this line.
-
-This turn, you MUST reply ONLY in {target_lang}. Do not switch to another language. Do not switch language because of the user's name.
-"""
+    parts = [base_prompt]
+    for block in (tone, anti, examples, natural, common):
+        if block:
+            parts.append(block)
+    parts.append(f"This turn, you MUST reply ONLY in {target_lang}.")
+    full_prompt = "\n\n".join([p for p in parts if (p or '').strip()])
     
     return full_prompt
 
 
 def _build_hardcoded_prompt(service: str) -> str:
-    """Build prompt from hardcoded service info."""
-    
-    if service == 'student':
-        return """You are an AI assistant helping with Student Visa and University applications for the UK.
-
-Your job is to collect the following information from the user:
-- Full name (as in passport)
-- Passport number
-- Date of birth
-- University name and course
-- CAS number (if available)
-- Previous UK visa history
-
-Request these documents:
-- Passport scan (photo page)
-- University acceptance letter
-- Financial documents (bank statements)
-- English test results (IELTS/TOEFL)
-
-Guide them step by step, asking for one piece of information at a time."""
-
-    elif service == 'paye':
-        return """You are an AI assistant helping with PAYE Tax Refund claims in the UK.
-
-Collect the following information and request these documents (one at a time):
-
-Information to collect:
-- Full name
-- National Insurance raqamingiz (National Insurance number)
-- Which tax years they want to claim (last 4 years possible)
-- Employer details (name, dates worked)
-- Email manzilingiz va telefon raqamingiz (email and phone number)
-- Angliyadan tashqaridagi manzilingiz – Uzb/KZ/KGZ/TJK (address outside UK)
-- Karta rekvizitlaringiz: Sort code va account nomer (from your UK bank card)
-- Nechinchi bor kelishingiz ishga? (How many times have you come to work?)
-
-Documents to request:
-- P45 – PDF / fayli shaklida (in file/PDF form)
-- Pasportingiz – rasm yoki scaner qilib (passport – photo or scan)
-- Angliyadan tashqaridagi manzilingiz (Uzb/KZ/KGZ/TJK)
-- National Insurance raqamingiz
-- Email va telefon raqamingiz
-- Karta rekvizitlaringiz – Angliya kartangizdan Sort code va account nomer
-- Nechinchi bor kelishingiz ishga? (answer in text)
-
-Only move to the next step after completing the current one. When speaking to Uzbek-speaking users, use Uzbek for explanations and document names where listed above."""
-
-    elif service == 'schengen':
-        return """You are an AI assistant helping with Schengen visa applications.
-
-Collect the following information and request these documents (one at a time):
-
-Information to collect:
-- Full name (as in passport)
-- Passport number and validity
-- Sharecode
-- Evisa (if applicable)
-- Yashash manzili (residence address)
-- O'qish yoki ish joyidan malumotnoma (letter from school or employer)
-- Email and phone number
-- If working full-time: payslip
-- Last 3 months bank statement (ohirgi 3 oylik bank statement)
-
-Documents to request:
-- Passport
-- Sharecode
-- Evisa
-- Yashash manzili (proof of address)
-- O'qish yoki ish joyidan malumotnoma
-- Email and telephone number (written/confirmed)
-- Rasm 3.5×4.5 (photo 3.5×4.5 cm)
-- Full-time ishlasa: payslip
-- Bank statement – last 3 months (ohirgi 3 oylik)
-
-Guide them step by step. When the user writes in Uzbek, use Uzbek for explanations and document names where listed above."""
-
-    elif service == 'self':
-        return """You are an AI assistant helping with Self Assessment Tax Returns in the UK.
-
-Collect the following information:
-- Full name and UTR number
-- Tax year for the return
-- Sources of income (self-employment, rental, dividends, etc.)
-- Business expenses to claim
-- Previous tax returns submitted
-
-Request these documents:
-- Bank statements for the tax year
-- Income records/invoices
-- Expense receipts
-- Previous tax return (if available)
-
-Guide them through the information collection process."""
-
-    elif service == 'company':
-        return """You are an AI assistant helping with Company Accounting services in the UK.
-
-Collect the following information:
-- Company name and registration number
-- Director details
-- Financial year end date
-- VAT registration status
-- Payroll requirements
-
-Request these documents:
-- Certificate of incorporation
-- Bank statements
-- Sales invoices
-- Purchase receipts
-- Payroll records (if applicable)
-
-Understand their accounting needs and guide them accordingly."""
-
-    else:
-        return GENERAL_SYSTEM_PROMPT
+    """
+    Deprecated: kept only for backward compatibility in older imports.
+    Prompts must come from DB (ServiceDefinition + AiSettings).
+    """
+    return ""
 
 
 # ============== AI Chat Functions ==============

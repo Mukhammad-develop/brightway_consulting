@@ -262,7 +262,19 @@ class AiSettings(models.Model):
     Global AI settings editable from the panel.
     Stored in DB so master/admin can tune prompts without deploy.
     """
+    # Classifier prompt (optional override). If blank, classifier can be auto-built from ServiceDefinition keywords.
     service_classifier_prompt = models.TextField(blank=True, default='')
+
+    # Global prompt blocks
+    general_system_prompt = models.TextField(blank=True, default='')
+    collect_and_assign_behavior = models.TextField(blank=True, default='')
+    tone_rules = models.TextField(blank=True, default='')
+    anti_bot_patterns = models.TextField(blank=True, default='')
+    style_examples = models.TextField(blank=True, default='')
+    natural_language_rules = models.TextField(blank=True, default='')
+
+    # Misc behavior / safety rules appended to every system prompt
+    common_rules = models.TextField(blank=True, default='')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

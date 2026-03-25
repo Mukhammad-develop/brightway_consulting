@@ -8,6 +8,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST, require_http_methods
+from django.db.utils import OperationalError
 
 from core.models import ServiceDefinition, ServiceStep, Case
 from ..decorators import login_required, elevated_required
@@ -32,11 +33,20 @@ def services_list(request):
     if request.method == 'POST':
         action = request.POST.get('action', '').strip()
         if action == 'update_ai':
-            prompt = (request.POST.get('service_classifier_prompt') or '').strip()
-            s, _ = AiSettings.objects.get_or_create(pk=1)
-            s.service_classifier_prompt = prompt
-            s.save()
-            messages.success(request, 'AI service classifier prompt updated.')
+            try:
+                s, _ = AiSettings.objects.get_or_create(pk=1)
+                s.service_classifier_prompt = (request.POST.get('service_classifier_prompt') or '').strip()
+                s.general_system_prompt = (request.POST.get('general_system_prompt') or '').strip()
+                s.collect_and_assign_behavior = (request.POST.get('collect_and_assign_behavior') or '').strip()
+                s.tone_rules = (request.POST.get('tone_rules') or '').strip()
+                s.anti_bot_patterns = (request.POST.get('anti_bot_patterns') or '').strip()
+                s.style_examples = (request.POST.get('style_examples') or '').strip()
+                s.natural_language_rules = (request.POST.get('natural_language_rules') or '').strip()
+                s.common_rules = (request.POST.get('common_rules') or '').strip()
+                s.save()
+                messages.success(request, 'AI service classifier prompt updated.')
+            except OperationalError:
+                messages.error(request, 'Database is missing AI settings table. Run migrations and reload the site.')
             return redirect('panel:services_list')
         if action == 'load_defaults':
             from django.core.management import call_command
@@ -47,7 +57,12 @@ def services_list(request):
                 messages.error(request, f'Failed to load defaults: {e}')
             return redirect('panel:services_list')
 
-    ai_settings, _ = AiSettings.objects.get_or_create(pk=1)
+    try:
+        ai_settings, _ = AiSettings.objects.get_or_create(pk=1)
+    except OperationalError:
+        # Migrations not applied yet (e.g. PythonAnywhere just pulled new code)
+        ai_settings = AiSettings(service_classifier_prompt='')
+        messages.warning(request, 'AI settings table not found. Run migrations to enable editing AI prompts.')
     services = ServiceDefinition.objects.prefetch_related('steps').all()
     
     # Count cases per service

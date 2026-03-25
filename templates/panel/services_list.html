@@ -8,32 +8,6 @@
 
 {% block content %}
 <div class="services-container">
-    <div class="panel-card" style="margin-bottom: 1.5rem;">
-        <div class="card-header">AI: Service Detection (Classifier)</div>
-        <div class="card-body">
-            <form method="post" action="{% url 'panel:services_list' %}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="update_ai">
-                <div class="form-group">
-                    <label>Classifier Prompt</label>
-                    <textarea name="service_classifier_prompt" class="form-textarea prompt-textarea" rows="10"
-                              placeholder="You are a service classifier...">{{ ai_settings.service_classifier_prompt|default:'' }}</textarea>
-                    <small>This prompt controls how the bot decides between student/paye/schengen/self/company/general.</small>
-                </div>
-                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                    <button type="submit" class="btn btn-outline btn-sm">Save AI Prompt</button>
-                </div>
-            </form>
-            <form method="post" action="{% url 'panel:services_list' %}" style="margin-top:0.75rem;">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="load_defaults">
-                <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Load default services and AI prompts? This will create/update records.');">
-                    Load Default Services
-                </button>
-            </form>
-        </div>
-    </div>
-
     {% if services %}
     <div class="services-grid">
         {% for item in services %}
@@ -110,6 +84,71 @@
         </div>
     </div>
     {% endif %}
+
+    <div class="panel-card" style="margin-top: 1.5rem;">
+        <div class="card-header">AI Settings</div>
+        <div class="card-body">
+            <form method="post" action="{% url 'panel:services_list' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_ai">
+                <div class="form-group">
+                    <label>Service Detection (Classifier Prompt)</label>
+                    <textarea name="service_classifier_prompt" class="form-textarea prompt-textarea" rows="10"
+                              placeholder="Leave blank to auto-build from your active services + keywords.">{{ ai_settings.service_classifier_prompt|default:'' }}</textarea>
+                    <small>
+                        If empty, the classifier will be generated automatically from your active services and their keywords.
+                        If you paste a prompt here, it overrides the automatic classifier.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label>General System Prompt</label>
+                    <textarea name="general_system_prompt" class="form-textarea prompt-textarea" rows="8">{{ ai_settings.general_system_prompt|default:'' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Collect &amp; Assign Behavior</label>
+                    <textarea name="collect_and_assign_behavior" class="form-textarea prompt-textarea" rows="10">{{ ai_settings.collect_and_assign_behavior|default:'' }}</textarea>
+                    <small>Use the marker `[READY_FOR_CONSULTANT]` exactly when collection is complete.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Tone Rules</label>
+                    <textarea name="tone_rules" class="form-textarea prompt-textarea" rows="6">{{ ai_settings.tone_rules|default:'' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Anti-bot Patterns</label>
+                    <textarea name="anti_bot_patterns" class="form-textarea prompt-textarea" rows="6">{{ ai_settings.anti_bot_patterns|default:'' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Style Examples</label>
+                    <textarea name="style_examples" class="form-textarea prompt-textarea" rows="6">{{ ai_settings.style_examples|default:'' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Natural Language Rules</label>
+                    <textarea name="natural_language_rules" class="form-textarea prompt-textarea" rows="6">{{ ai_settings.natural_language_rules|default:'' }}</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Common Rules</label>
+                    <textarea name="common_rules" class="form-textarea prompt-textarea" rows="8">{{ ai_settings.common_rules|default:'' }}</textarea>
+                </div>
+                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                    <button type="submit" class="btn btn-outline btn-sm">Save AI Prompt</button>
+                </div>
+            </form>
+            <form method="post" action="{% url 'panel:services_list' %}" style="margin-top:0.75rem;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="load_defaults">
+                <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Load default services and AI prompts? This will create/update records.');">
+                    Load Default Services
+                </button>
+            </form>
+        </div>
+    </div>
 </div>
 
 <style>
