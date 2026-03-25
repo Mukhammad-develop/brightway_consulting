@@ -6,6 +6,8 @@ import os
 import re
 import uuid
 import mimetypes
+import subprocess
+import tempfile
 from datetime import datetime
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -198,9 +200,8 @@ def file_view(request, doc_id):
         if not os.path.exists(file_path):
             raise Http404('File not found on server.')
         
-        # Content type from filename so browser can display/play when appropriate
-        content_type, _ = mimetypes.guess_type(filename)
         media_type = (document.media_type or '').lower()
+        content_type, _ = mimetypes.guess_type(filename)
         if not content_type:
             if media_type == 'photo':
                 content_type = 'image/jpeg'
@@ -210,25 +211,53 @@ def file_view(request, doc_id):
                 content_type = 'video/mp4'
         if not content_type:
             content_type = 'application/octet-stream'
-        # Viewable = image/audio/video so browser opens inline instead of downloading
+
         viewable = (
             media_type in ('photo', 'voice', 'video') or
             content_type.startswith('image/') or
             content_type.startswith('audio/') or
             content_type.startswith('video/')
         )
-        
-        # Use display name for download filename when set
+
         disp_name = document.display_name or document.file_path or filename
-        
         download = request.GET.get('download', False)
+
+        # Safari doesn't support OGG/Opus — convert to MP3 on the fly
+        ua = request.META.get('HTTP_USER_AGENT', '')
+        is_safari = 'Safari' in ua and 'Chrome' not in ua
+        is_ogg = os.path.splitext(file_path)[1].lower() in ('.ogg', '.oga', '.opus')
+        if media_type == 'voice' and is_ogg and is_safari and not download:
+            tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+            tmp.close()
+            try:
+                result = subprocess.run(
+                    ['ffmpeg', '-y', '-i', file_path, '-acodec', 'libmp3lame', '-ar', '16000', '-ac', '1', tmp.name],
+                    capture_output=True, timeout=30
+                )
+                if result.returncode == 0 and os.path.exists(tmp.name):
+                    data = open(tmp.name, 'rb').read()
+                    os.unlink(tmp.name)
+                    response = HttpResponse(data, content_type='audio/mpeg')
+                    response['Content-Disposition'] = f'inline; filename="{disp_name}.mp3"'
+                    response['Accept-Ranges'] = 'bytes'
+                    return response
+            except Exception:
+                pass
+            finally:
+                if os.path.exists(tmp.name):
+                    try:
+                        os.unlink(tmp.name)
+                    except Exception:
+                        pass
+
         if download or not viewable:
             response = FileResponse(open(file_path, 'rb'), content_type=content_type)
             response['Content-Disposition'] = f'attachment; filename="{disp_name}"'
         else:
             response = FileResponse(open(file_path, 'rb'), content_type=content_type)
             response['Content-Disposition'] = f'inline; filename="{disp_name}"'
-        
+            response['Accept-Ranges'] = 'bytes'
+
         return response
     
     # For Telegram files, we'd need to use the Telegram API

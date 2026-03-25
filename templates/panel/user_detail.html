@@ -159,7 +159,9 @@
                                 {% if msg.file_media_type == 'voice' %}
                                 <div class="msg-bubble msg-voice-bubble">
                                     <audio class="voice-player" controls preload="none"
-                                           src="{% url 'panel:file_view' msg.file_info.id %}"></audio>
+                                           src="{% url 'panel:file_view' msg.file_info.id %}">
+                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1">Download audio</a>
+                                    </audio>
                                 </div>
                                 {% elif msg.file_media_type == 'photo' %}
                                 <div class="msg-bubble msg-file-bubble">
@@ -421,7 +423,8 @@
             const viewUrl = '/admin/files/' + fileDoc.id + '/view';
             if (mt === 'voice') {
                 bubbleHtml = '<div class="msg-bubble msg-voice-bubble">' +
-                    '<audio class="voice-player" controls preload="none" src="' + viewUrl + '"></audio>' +
+                    '<audio class="voice-player" controls preload="none" src="' + viewUrl + '">' +
+                    '<a href="' + viewUrl + '?download=1">Download audio</a></audio>' +
                     '</div>';
             } else if (mt === 'photo') {
                 bubbleHtml = '<div class="msg-bubble msg-file-bubble">' +
