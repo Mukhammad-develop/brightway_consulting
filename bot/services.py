@@ -686,13 +686,13 @@ def _transcribe_via_whisper(file_path: Path, lang_code: str = '') -> str:
 
 def _looks_sensible(text: str) -> bool:
     """
-    Minimal sanity check: transcription must have at least 2 words and
-    not be pure punctuation/numbers.
+    Minimal sanity check: transcription must contain at least one word
+    with actual letters (not pure punctuation, numbers or whitespace).
+    Short messages like "Salom" or "Ha" are perfectly valid.
     """
     if not text or not text.strip():
         return False
-    words = [w for w in text.strip().split() if any(c.isalpha() for c in w)]
-    return len(words) >= 2
+    return any(c.isalpha() for c in text)
 
 
 def transcribe_voice(file_path: str, language_hint: str = None) -> str:
