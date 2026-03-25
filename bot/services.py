@@ -2,7 +2,8 @@
 AI Services for Brightway Consulting Telegram bot.
 
 Handles service detection, system prompts, AI interactions, voice transcription,
-and profile extraction using OpenAI APIs (GPT-4o-mini and Whisper-1).
+and profile extraction using OpenAI APIs (GPT-4o-mini and Whisper-1) and
+Muxlisa AI STT for Uzbek voice messages.
 """
 
 import os
@@ -13,6 +14,7 @@ import json
 import logging
 import subprocess
 import tempfile
+import requests as _requests
 from pathlib import Path
 from functools import wraps
 
@@ -568,9 +570,75 @@ def convert_audio(input_path: str, output_path: str = None) -> str:
         return None
 
 
+def _transcribe_via_muxlisa(file_path: Path) -> str:
+    """
+    Transcribe an audio file using Muxlisa AI (Uzbek STT).
+    Always converts to WAV first so the API receives a clean format.
+    Returns transcribed text or None on error.
+    """
+    api_key = getattr(settings, 'MUXLISA_API_KEY', '') or os.getenv('MUXLISA_API_KEY', '')
+    if not api_key:
+        logger.error("MUXLISA_API_KEY not set — cannot transcribe Uzbek audio")
+        return None
+
+    temp_file = None
+    wav_path = file_path
+
+    # Always send WAV to Muxlisa for reliable results
+    if file_path.suffix.lower() != '.wav':
+        temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+        temp_file.close()
+        converted = convert_audio(str(file_path), temp_file.name)
+        if not converted:
+            logger.error(f"Muxlisa: failed to convert {file_path.suffix} to WAV")
+            return None
+        wav_path = Path(converted)
+
+    try:
+        start_time = time.time()
+        with open(wav_path, 'rb') as f:
+            resp = _requests.post(
+                'https://service.muxlisa.uz/api/v2/stt',
+                headers={'x-api-key': api_key},
+                files={'audio': (wav_path.name, f, 'audio/wav')},
+                timeout=60,
+            )
+        elapsed = time.time() - start_time
+
+        if resp.status_code != 200:
+            logger.error(f"Muxlisa API error {resp.status_code}: {resp.text[:200]}")
+            return None
+
+        data = resp.json()
+        # Muxlisa returns {"result": "...", ...} or plain text
+        if isinstance(data, dict):
+            text = data.get('result') or data.get('text') or data.get('transcription') or ''
+        else:
+            text = str(data)
+
+        text = text.strip()
+        logger.info(f"Muxlisa STT ({elapsed:.2f}s): {text[:50]}...")
+        return text or None
+
+    except Exception as e:
+        logger.error(f"Muxlisa transcription error: {e}")
+        return None
+
+    finally:
+        if temp_file and Path(temp_file.name).exists():
+            try:
+                os.unlink(temp_file.name)
+            except Exception:
+                pass
+
+
 def transcribe_voice(file_path: str, language_hint: str = None) -> str:
     """
-    Transcribe voice/audio file using OpenAI Whisper-1.
+    Transcribe voice/audio file.
+
+    Routing:
+      - Uzbek (uz): Muxlisa AI STT API
+      - English / Russian / unknown: OpenAI Whisper-1
     
     Args:
         file_path: Path to audio file
@@ -579,20 +647,27 @@ def transcribe_voice(file_path: str, language_hint: str = None) -> str:
     Returns:
         Transcribed text or None on error
     """
-    client = get_openai_client()
-    if not client:
-        return None
-    
     file_path = Path(file_path)
     if not file_path.exists():
         logger.error(f"Audio file not found: {file_path}")
         return None
-    
+
+    lang_code = (language_hint or '')[:2].lower()
+
+    # --- Uzbek: use Muxlisa AI ---
+    if lang_code == 'uz':
+        logger.info(f"Routing Uzbek voice to Muxlisa STT: {file_path.name}")
+        return _transcribe_via_muxlisa(file_path)
+
+    # --- English / Russian / other: OpenAI Whisper-1 ---
+    client = get_openai_client()
+    if not client:
+        return None
+
     # Whisper-1 supported formats
     supported_formats = {'.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'}
     file_ext = file_path.suffix.lower()
-    
-    # Convert if needed
+
     temp_file = None
     if file_ext in {'.ogg', '.oga', '.opus'}:
         temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
@@ -605,50 +680,42 @@ def transcribe_voice(file_path: str, language_hint: str = None) -> str:
     elif file_ext not in supported_formats:
         logger.error(f"Unsupported audio format: {file_ext}")
         return None
-    
+
     try:
         start_time = time.time()
-        
-        # Prepare API call
+
         with open(file_path, 'rb') as audio_file:
             kwargs = {
                 'model': 'whisper-1',
                 'file': audio_file,
             }
-            
-            # Add language hint if provided
-            if language_hint:
-                # Map our codes to Whisper codes
-                lang_map = {
-                    'en': 'en',
-                    'ru': 'ru',
-                    'uz': 'uz',
-                }
-                whisper_lang = lang_map.get(language_hint[:2].lower())
+
+            if lang_code:
+                lang_map = {'en': 'en', 'ru': 'ru'}
+                whisper_lang = lang_map.get(lang_code)
                 if whisper_lang:
                     kwargs['language'] = whisper_lang
-            
+
             response = client.audio.transcriptions.create(**kwargs)
-        
+
         response_time = time.time() - start_time
         _track_usage(response_time=response_time)
-        
+
         transcription = response.text if hasattr(response, 'text') else str(response)
-        logger.info(f"Transcribed audio ({response_time:.2f}s): {transcription[:50]}...")
-        
+        logger.info(f"Whisper STT ({response_time:.2f}s): {transcription[:50]}...")
+
         return transcription
-        
+
     except Exception as e:
         logger.error(f"Transcription error: {e}")
         _track_usage(error=True)
         return None
-    
+
     finally:
-        # Clean up temp file
         if temp_file and Path(temp_file.name).exists():
             try:
                 os.unlink(temp_file.name)
-            except:
+            except Exception:
                 pass
 
 

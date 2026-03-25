@@ -101,6 +101,7 @@ TG_PHONE = os.getenv('TG_PHONE', '')
 TG_API_ID_2 = os.getenv('TG_API_ID_2', '')
 TG_API_HASH_2 = os.getenv('TG_API_HASH_2', '')
 TG_PHONE_2 = os.getenv('TG_PHONE_2', '')
+MUXLISA_API_KEY = os.getenv('MUXLISA_API_KEY', '')
 
 # Admin credentials from .env
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
