@@ -209,6 +209,17 @@ def user_detail(request, user_id):
     # Get current admin for permission checks
     current_admin = get_current_admin(request)
     current_admin_id = request.session.get('admin_id')
+
+    # Candidate assignees for UI (elevated users can reassign)
+    assignee_options = []
+    if is_elevated(request):
+        svc_slug = getattr(active_case, 'service', None)
+        qs = AdminUser.objects.filter(is_active=True)
+        # Prefer those responsible for this service (if known); fallback to all active
+        if svc_slug:
+            preferred = qs.filter(responsible_services__slug=svc_slug).distinct()
+            qs = preferred if preferred.exists() else qs
+        assignee_options = list(qs.order_by('role', 'username'))
     
     context.update({
         'page_title': f'User: {user.username or user.telegram_id}',
@@ -222,10 +233,49 @@ def user_detail(request, user_id):
         'current_admin_id': current_admin_id,
         'active_case': active_case,
         'assigned_admin': assigned_admin,
+        'assignee_options': assignee_options,
         'conversation': conversation_display,
     })
     
     return render(request, 'panel/user_detail.html', context)
+
+
+@login_required
+@require_POST
+def user_reassign(request, user_id):
+    """
+    Elevated users can reassign the user's active case to another admin/consultant.
+    Updates Case.assigned_to and ensures AdminAssignment exists for access scoping.
+    """
+    if not is_elevated(request):
+        messages.error(request, 'Access denied.')
+        return redirect('panel:user_detail', user_id=user_id)
+
+    user = get_object_or_404(TgUser, pk=user_id)
+    active_case = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
+    if not active_case:
+        messages.error(request, 'No active case to assign.')
+        return redirect('panel:user_detail', user_id=user_id)
+
+    assignee_id = (request.POST.get('assigned_to') or '').strip()
+    if not assignee_id:
+        # Allow clearing assignment
+        active_case.assigned_to = None
+        active_case.save(update_fields=['assigned_to'])
+        messages.success(request, 'Assignment cleared.')
+        return redirect('panel:user_detail', user_id=user_id)
+
+    try:
+        assignee = AdminUser.objects.get(pk=int(assignee_id), is_active=True)
+    except Exception:
+        messages.error(request, 'Invalid assignee.')
+        return redirect('panel:user_detail', user_id=user_id)
+
+    active_case.assigned_to = assignee
+    active_case.save(update_fields=['assigned_to'])
+    AdminAssignment.objects.get_or_create(admin=assignee, user=user)
+    messages.success(request, f'Assigned to {assignee.display_name or assignee.username}.')
+    return redirect('panel:user_detail', user_id=user_id)
 
 
 @login_required
