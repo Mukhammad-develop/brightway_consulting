@@ -156,18 +156,26 @@
                         {% for msg in conversation %}
                         <div class="chat-msg {{ msg.role }}" data-timestamp="{{ msg.timestamp|default:'' }}">
                             {% if msg.file_info %}
-                            <div class="msg-bubble msg-file-bubble">
-                                <div class="chat-file-card">
-                                    <span class="chat-file-icon">{% if msg.file_media_type == 'photo' %}🖼️{% elif msg.file_media_type == 'voice' %}🎤{% elif msg.file_media_type == 'video' %}🎬{% else %}📄{% endif %}</span>
-                                    <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
-                                    <div class="chat-file-actions">
-                                        {% if msg.file_media_type == 'photo' or msg.file_media_type == 'voice' or msg.file_media_type == 'video' %}
-                                        <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">View</a>
-                                        {% endif %}
-                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
+                                {% if msg.file_media_type == 'voice' %}
+                                <div class="msg-bubble msg-voice-bubble">
+                                    <audio class="voice-player" controls preload="none"
+                                           src="{% url 'panel:file_view' msg.file_info.id %}"></audio>
+                                </div>
+                                {% elif msg.file_media_type == 'photo' %}
+                                <div class="msg-bubble msg-file-bubble">
+                                    <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="photo">
+                                </div>
+                                {% else %}
+                                <div class="msg-bubble msg-file-bubble">
+                                    <div class="chat-file-card">
+                                        <span class="chat-file-icon">{% if msg.file_media_type == 'video' %}🎬{% else %}📄{% endif %}</span>
+                                        <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
+                                        <div class="chat-file-actions">
+                                            <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                                {% endif %}
                             {% else %}
                             <div class="msg-bubble">{% if msg.content %}{{ msg.content }}{% else %}<em>—</em>{% endif %}</div>
                             {% endif %}
@@ -362,6 +370,9 @@
 .chat-file-icon { font-size: 1.25rem; }
 .chat-file-name { font-size: 0.9rem; word-break: break-all; }
 .chat-file-actions { display: flex; gap: 0.35rem; margin-left: auto; }
+.msg-voice-bubble { padding: 0.4rem 0.6rem; background: transparent !important; box-shadow: none !important; }
+.voice-player { display: block; height: 36px; min-width: 220px; max-width: 100%; border-radius: 20px; outline: none; }
+.chat-inline-photo { display: block; max-width: 220px; max-height: 220px; border-radius: 10px; object-fit: cover; }
 .assign-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .form-select-sm { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
 .detail-main .panel-card { margin-bottom: 1.5rem; }
@@ -407,16 +418,23 @@
         let bubbleHtml;
         if (fileDoc && fileDoc.id) {
             const mt = fileDoc.media_type || '';
-            const icon = (mt === 'photo') ? '🖼️' : (mt === 'voice') ? '🎤' : (mt === 'video') ? '🎬' : '📄';
-            const fn = (fileDoc.filename || 'File').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const viewUrl = '/admin/files/' + fileDoc.id + '/view';
-            const downloadUrl = viewUrl + '?download=1';
-            const viewable = (mt === 'photo' || mt === 'voice' || mt === 'video');
-            let actions = viewable ? '<a href="' + viewUrl + '" target="_blank" rel="noopener" class="btn btn-xs btn-outline">View</a> ' : '';
-            actions += '<a href="' + downloadUrl + '" class="btn btn-xs btn-outline">Download</a>';
-            bubbleHtml = '<div class="msg-bubble msg-file-bubble"><div class="chat-file-card">' +
-                '<span class="chat-file-icon">' + icon + '</span><span class="chat-file-name">' + fn + '</span>' +
-                '<div class="chat-file-actions">' + actions + '</div></div></div>';
+            if (mt === 'voice') {
+                bubbleHtml = '<div class="msg-bubble msg-voice-bubble">' +
+                    '<audio class="voice-player" controls preload="none" src="' + viewUrl + '"></audio>' +
+                    '</div>';
+            } else if (mt === 'photo') {
+                bubbleHtml = '<div class="msg-bubble msg-file-bubble">' +
+                    '<img src="' + viewUrl + '" class="chat-inline-photo" alt="photo">' +
+                    '</div>';
+            } else {
+                const icon = (mt === 'video') ? '🎬' : '📄';
+                const fn = (fileDoc.filename || 'File').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                bubbleHtml = '<div class="msg-bubble msg-file-bubble"><div class="chat-file-card">' +
+                    '<span class="chat-file-icon">' + icon + '</span><span class="chat-file-name">' + fn + '</span>' +
+                    '<div class="chat-file-actions"><a href="' + viewUrl + '?download=1" class="btn btn-xs btn-outline">Download</a></div>' +
+                    '</div></div>';
+            }
         } else {
             const text = (content || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             bubbleHtml = '<div class="msg-bubble">' + text + '</div>';
