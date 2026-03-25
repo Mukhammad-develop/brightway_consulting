@@ -44,6 +44,25 @@
                         {% endfor %}
                     </select>
                 </div>
+
+                <div class="form-group">
+                    <label>Responsible Services (Consultant Mode)</label>
+                    <div class="service-grid">
+                        {% for svc in services %}
+                        <label class="service-chip">
+                            <input type="checkbox" name="responsible_services" value="{{ svc.id }}"
+                                   {% if svc.id in selected_service_ids %}checked{% endif %}>
+                            <span class="chip-text">{{ svc.icon_emoji }} {{ svc.name }}</span>
+                        </label>
+                        {% endfor %}
+                        {% if not services %}
+                        <div class="muted">No active services found.</div>
+                        {% endif %}
+                    </div>
+                    <div class="muted" style="margin-top: 0.5rem;">
+                        When Consultant Mode is ON, this user will only see clients/cases for these services.
+                    </div>
+                </div>
                 
                 {% if form_action == 'add' %}
                 <div class="form-row">
@@ -102,5 +121,10 @@
 .assignment-item { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); }
 .assignment-item:last-child { border-bottom: none; }
 .assignment-date { font-size: 0.8rem; color: var(--text-muted); }
+.muted { color: var(--text-muted); font-size: 0.9rem; }
+.service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.service-chip { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); cursor: pointer; }
+.service-chip input { margin: 0; }
+.chip-text { font-size: 0.95rem; color: var(--text-primary); }
 </style>
 {% endblock %}

@@ -4,6 +4,7 @@ Includes client notes functionality.
 """
 
 import json
+from datetime import datetime
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
@@ -13,11 +14,16 @@ from django.views.decorators.http import require_POST
 
 from core.models import TgUser, Case, Document, UserAiProfile, ClientNote, AdminUser, AdminAssignment
 from ..decorators import login_required
-from .helpers import session_ctx, get_current_admin, is_elevated, get_file_refs_for_conversation, build_conversation_display
+from .helpers import session_ctx, get_current_admin, is_elevated, get_file_refs_for_conversation, build_conversation_display, is_consultant_mode, get_responsible_service_slugs
 
 
 def _consultant_can_access_user(request, target_user):
     """If current user is a consultant, they may only access assigned users."""
+    if is_consultant_mode(request):
+        slugs = get_responsible_service_slugs(request)
+        if not slugs:
+            return False
+        return Case.objects.filter(user=target_user, service__in=slugs).exists()
     if is_elevated(request):
         return True
     admin = get_current_admin(request)
@@ -33,11 +39,19 @@ def users_list(request):
     """
     context = session_ctx(request)
     
-    # Get all users
+    consultant_mode = is_consultant_mode(request)
+    slugs = get_responsible_service_slugs(request) if consultant_mode else []
+
+    # Get all users (optionally scoped in consultant mode)
     users = TgUser.objects.annotate(
         cases_count=Count('cases'),
         docs_count=Count('cases__documents')
     )
+    if consultant_mode:
+        if slugs:
+            users = users.filter(cases__service__in=slugs).distinct()
+        else:
+            users = users.none()
     
     # Search functionality
     search_query = request.GET.get('search', '').strip()
@@ -106,17 +120,31 @@ def my_clients(request):
     admin = get_current_admin(request)
     if not admin:
         return redirect('panel:login')
-    assignments = AdminAssignment.objects.filter(admin=admin).select_related('user').order_by('-assigned_at')
-    # Annotate with last case update for sorting
+    consultant_mode = is_consultant_mode(request)
+    slugs = get_responsible_service_slugs(request) if consultant_mode else []
+
     from django.db.models import Max
     client_list = []
-    for a in assignments:
-        last_updated = Case.objects.filter(user=a.user).aggregate(Max('updated_at'))['updated_at__max']
-        client_list.append({'assignment': a, 'user': a.user, 'last_updated': last_updated})
-    client_list.sort(key=lambda x: x['last_updated'] or x['assignment'].assigned_at, reverse=True)
+    if consultant_mode:
+        # Service-based view
+        if slugs:
+            svc_users = TgUser.objects.filter(cases__service__in=slugs).distinct()
+            for u in svc_users:
+                last_updated = Case.objects.filter(user=u, service__in=slugs).aggregate(Max('updated_at'))['updated_at__max']
+                client_list.append({'assignment': None, 'user': u, 'last_updated': last_updated})
+            client_list.sort(key=lambda x: x['last_updated'] or datetime.min, reverse=True)
+        else:
+            client_list = []
+    else:
+        assignments = AdminAssignment.objects.filter(admin=admin).select_related('user').order_by('-assigned_at')
+        for a in assignments:
+            last_updated = Case.objects.filter(user=a.user).aggregate(Max('updated_at'))['updated_at__max']
+            client_list.append({'assignment': a, 'user': a.user, 'last_updated': last_updated})
+        client_list.sort(key=lambda x: x['last_updated'] or x['assignment'].assigned_at, reverse=True)
     context.update({
         'page_title': 'My Clients',
         'client_list': client_list,
+        'consultant_mode': consultant_mode,
     })
     return render(request, 'panel/my_clients.html', context)
 
@@ -156,7 +184,24 @@ def user_detail(request, user_id):
     notes = ClientNote.objects.filter(user=user).order_by('-is_pinned', '-created_at')
     
     # Active case and conversation for chat/reply
-    active_case = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
+    active_case = (
+        Case.objects.filter(user=user, status='active')
+        .select_related('assigned_to')
+        .order_by('-updated_at')
+        .first()
+    )
+
+    # Best-effort "assigned to" for display
+    assigned_admin = getattr(active_case, 'assigned_to', None)
+    if assigned_admin is None:
+        last_assigned = (
+            Case.objects.filter(user=user)
+            .exclude(assigned_to__isnull=True)
+            .select_related('assigned_to')
+            .order_by('-updated_at')
+            .first()
+        )
+        assigned_admin = getattr(last_assigned, 'assigned_to', None)
     conversation = active_case.get_conversation() if active_case else []
     file_refs = get_file_refs_for_conversation(active_case, conversation)
     conversation_display = build_conversation_display(conversation, file_refs)
@@ -176,6 +221,7 @@ def user_detail(request, user_id):
         'notes': notes,
         'current_admin_id': current_admin_id,
         'active_case': active_case,
+        'assigned_admin': assigned_admin,
         'conversation': conversation_display,
     })
     

@@ -13,6 +13,7 @@ urlpatterns = [
     path('admin/logout', auth.logout_view, name='logout'),
     path('admin/profile', auth.profile_view, name='profile'),
     path('admin/theme-toggle', auth.theme_toggle_view, name='theme_toggle'),
+    path('admin/consultant-toggle', auth.consultant_mode_toggle_view, name='consultant_toggle'),
     
     # Dashboard
     path('admin', dashboard.dashboard, name='dashboard'),

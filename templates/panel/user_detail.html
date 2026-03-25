@@ -50,6 +50,16 @@
                 
                 <div class="profile-details">
                     <div class="detail-row">
+                        <span class="detail-label">Assigned to</span>
+                        <span class="detail-value">
+                            {% if assigned_admin %}
+                                {{ assigned_admin.display_name|default:assigned_admin.username }} <span class="muted">({{ assigned_admin.role }})</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="detail-row">
                         <span class="detail-label">Phone</span>
                         <span class="detail-value">{{ user_obj.phone|default:"-" }}</span>
                     </div>

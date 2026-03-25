@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from core.models import TgUser, Case, Document, Payment
 from ..decorators import login_required
-from .helpers import session_ctx
+from .helpers import session_ctx, is_consultant_mode, get_responsible_service_slugs
 
 
 def get_ai_stats():
@@ -35,29 +35,48 @@ def dashboard(request):
     """
     context = session_ctx(request)
     
+    consultant_mode = is_consultant_mode(request)
+    svc_slugs = get_responsible_service_slugs(request) if consultant_mode else []
+
+    users_qs = TgUser.objects.all()
+    cases_qs = Case.objects.all()
+    payments_qs = Payment.objects.all()
+
+    if consultant_mode:
+        # Scope to services this admin is responsible for
+        if svc_slugs:
+            cases_qs = cases_qs.filter(service__in=svc_slugs)
+            users_qs = users_qs.filter(cases__service__in=svc_slugs).distinct()
+            payments_qs = payments_qs.filter(case__service__in=svc_slugs)
+        else:
+            # No responsibilities selected => show empty stats
+            cases_qs = cases_qs.none()
+            users_qs = users_qs.none()
+            payments_qs = payments_qs.none()
+
     # Get real statistics
-    total_users = TgUser.objects.count()
-    total_cases = Case.objects.count()
-    active_cases = Case.objects.filter(status='active').count()
+    total_users = users_qs.count()
+    total_cases = cases_qs.count()
+    active_cases = cases_qs.filter(status='active').count()
     
     # Calculate total revenue from payments
-    total_revenue = Payment.objects.aggregate(total=Sum('amount'))['total'] or 0
+    total_revenue = payments_qs.aggregate(total=Sum('amount'))['total'] or 0
     
     # Cases by status for chart
     cases_by_status = {
-        'pending': Case.objects.filter(payment_status='pending').count(),
+        'pending': cases_qs.filter(payment_status='pending').count(),
         'active': active_cases,
-        'completed': Case.objects.filter(status='completed').count(),
+        'completed': cases_qs.filter(status='completed').count(),
     }
     
     # Cases by service type
-    cases_by_service = Case.objects.values('service').annotate(
+    cases_by_service = cases_qs.values('service').annotate(
         count=Count('id')
     ).order_by('-count')
     
     # Revenue by month (last 6 months)
     six_months_ago = datetime.now() - timedelta(days=180)
-    revenue_by_month = Payment.objects.filter(
+    revenue_by_month = payments_qs.filter(
         payment_date__gte=six_months_ago
     ).annotate(
         month=TruncMonth('payment_date')
@@ -66,10 +85,10 @@ def dashboard(request):
     ).order_by('month')
     
     # Recent users (last 10)
-    recent_users = TgUser.objects.order_by('-created_at')[:10]
+    recent_users = users_qs.order_by('-created_at')[:10]
     
     # Recent cases (last 10)
-    recent_cases = Case.objects.select_related('user').order_by('-created_at')[:10]
+    recent_cases = cases_qs.select_related('user').order_by('-created_at')[:10]
     
     # Service display names for the chart
     service_labels = {
@@ -103,6 +122,7 @@ def dashboard(request):
     
     context.update({
         'page_title': 'Dashboard',
+        'consultant_mode': consultant_mode,
         'total_users': total_users,
         'total_cases': total_cases,
         'active_cases': active_cases,

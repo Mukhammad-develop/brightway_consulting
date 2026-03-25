@@ -47,6 +47,7 @@ def login_view(request):
                 request.session['admin_role'] = role
                 request.session['admin_id'] = admin_id
                 request.session['admin_display'] = display_name
+                request.session.setdefault('consultant_mode', False)
                 # Load theme from DB for DB admins
                 if admin_id:
                     from core.models import AdminUser
@@ -79,7 +80,7 @@ def logout_view(request):
     """
     # Clear admin session data
     for key in ['admin_logged_in', 'admin_username', 'admin_role', 'admin_id', 'admin_display',
-                'theme_mode', 'theme_dark', 'theme_light']:
+                'theme_mode', 'theme_dark', 'theme_light', 'consultant_mode']:
         request.session.pop(key, None)
     
     messages.info(request, 'You have been logged out.')
@@ -187,5 +188,15 @@ def theme_toggle_view(request):
     """Toggle theme mode (dark/light) and redirect back."""
     current = request.session.get('theme_mode', 'dark')
     request.session['theme_mode'] = 'light' if current == 'dark' else 'dark'
+    next_url = request.GET.get('next') or request.META.get('HTTP_REFERER') or '/admin/'
+    return redirect(next_url)
+
+
+@login_required
+@require_http_methods(['POST'])
+def consultant_mode_toggle_view(request):
+    """Toggle consultant mode (service-scoped filtering) and redirect back."""
+    current = bool(request.session.get('consultant_mode', False))
+    request.session['consultant_mode'] = not current
     next_url = request.GET.get('next') or request.META.get('HTTP_REFERER') or '/admin/'
     return redirect(next_url)

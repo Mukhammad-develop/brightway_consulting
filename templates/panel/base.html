@@ -173,6 +173,13 @@
                 
                 <div class="admin-topbar-right">
                     {% block topbar_actions %}{% endblock %}
+
+                    <form action="{% url 'panel:consultant_toggle' %}?next={{ request.get_full_path|urlencode }}" method="post" class="consultant-toggle-form">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline btn-sm consultant-toggle-btn" title="Toggle consultant mode (show only your services)">
+                            {% if consultant_mode %}Consultant Mode: ON{% else %}Consultant Mode: OFF{% endif %}
+                        </button>
+                    </form>
                     
                     <form action="{% url 'panel:theme_toggle' %}?next={{ request.get_full_path|urlencode }}" method="post" class="theme-toggle-form">
                         {% csrf_token %}

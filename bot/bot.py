@@ -227,14 +227,23 @@ def try_assign_case_to_consultant(case, user):
     """
     from django.db.models import Count
     from core.models import AdminUser, AdminAssignment
+    # Prefer admins/consultants responsible for this service (round-robin via least-loaded)
+    scoped = AdminUser.objects.filter(is_active=True, responsible_services__slug=case.service)
     consultant = (
-        AdminUser.objects.filter(role='consultant', is_active=True)
-        .annotate(assigned_count=Count('assigned_cases'))
-        .order_by('assigned_count')
+        scoped.annotate(assigned_count=Count('assigned_cases'))
+        .order_by('assigned_count', 'username')
         .first()
     )
     if not consultant:
-        consultant = AdminUser.objects.filter(is_active=True).order_by('role').first()
+        # Fallback: any consultant, then anyone
+        consultant = (
+            AdminUser.objects.filter(role='consultant', is_active=True)
+            .annotate(assigned_count=Count('assigned_cases'))
+            .order_by('assigned_count', 'username')
+            .first()
+        )
+    if not consultant:
+        consultant = AdminUser.objects.filter(is_active=True).order_by('role', 'username').first()
     if consultant:
         case.assigned_to = consultant
         case.save(update_fields=['assigned_to'])

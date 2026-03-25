@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count
 
-from core.models import AdminUser, AdminAssignment, TgUser
+from core.models import AdminUser, AdminAssignment, TgUser, ServiceDefinition
 from ..decorators import login_required, master_required
 from .helpers import session_ctx, hash_password
 from .notifications import notify_masters
@@ -97,6 +97,12 @@ def team_add(request):
             role=role,
             is_active=is_active,
         )
+
+        # Assign responsible services (multi-select)
+        service_ids = request.POST.getlist('responsible_services')
+        if service_ids:
+            services = ServiceDefinition.objects.filter(pk__in=service_ids)
+            admin.responsible_services.set(services)
         
         # Notify other masters
         current_admin_id = request.session.get('admin_id')
@@ -114,6 +120,7 @@ def team_add(request):
         'page_title': 'Add Team Member',
         'form_action': 'add',
         'roles': AdminUser.ROLE_CHOICES,
+        'services': ServiceDefinition.objects.filter(is_active=True).order_by('display_order', 'name'),
         **session_ctx(request),
     }
     return render(request, 'panel/team_form.html', context)
@@ -147,6 +154,11 @@ def team_edit(request, admin_id):
             messages.info(request, 'Password has been updated.')
         
         admin.save()
+
+        # Update responsible services (multi-select)
+        service_ids = request.POST.getlist('responsible_services')
+        services = ServiceDefinition.objects.filter(pk__in=service_ids) if service_ids else ServiceDefinition.objects.none()
+        admin.responsible_services.set(services)
         
         messages.success(request, f'Team member "{admin.display_name}" updated successfully.')
         return redirect('panel:team_list')
@@ -160,6 +172,8 @@ def team_edit(request, admin_id):
         'admin_user': admin,
         'assignments': assignments,
         'roles': AdminUser.ROLE_CHOICES,
+        'services': ServiceDefinition.objects.filter(is_active=True).order_by('display_order', 'name'),
+        'selected_service_ids': set(admin.responsible_services.values_list('id', flat=True)),
         **session_ctx(request),
     }
     return render(request, 'panel/team_form.html', context)

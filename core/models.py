@@ -186,6 +186,12 @@ class AdminUser(models.Model):
     theme_mode = models.CharField(max_length=10, default='dark')  # 'dark' | 'light'
     theme_dark = models.CharField(max_length=20, default='blue')  # color theme when dark
     theme_light = models.CharField(max_length=20, default='blue')  # color theme when light
+    # Service responsibility: used for "consultant mode" filtering and auto-routing
+    responsible_services = models.ManyToManyField(
+        'ServiceDefinition',
+        blank=True,
+        related_name='responsible_admins',
+    )
     created_at = models.DateTimeField(default=datetime.now)
     last_login = models.DateTimeField(null=True, blank=True)
     

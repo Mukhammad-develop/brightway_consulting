@@ -39,7 +39,7 @@ def check_admin_login(username, password):
     Returns tuple: (success, role, admin_id, display_name)
     
     Checks:
-    1. .env master credentials first (returns admin_id=None)
+    1. .env master credentials first (creates/returns AdminUser for persistence)
     2. Database AdminUser records
     """
     from core.models import AdminUser
@@ -50,7 +50,30 @@ def check_admin_login(username, password):
         (getattr(settings, 'MASTER2_USERNAME', ''), getattr(settings, 'MASTER2_PASSWORD', ''), getattr(settings, 'MASTER2_DISPLAY', 'Master Admin')),
     ]:
         if env_user and username == env_user and password == env_pass:
-            return (True, 'master', None, display)
+            # Create a DB record so master can store service responsibility, theme, etc.
+            admin, _ = AdminUser.objects.get_or_create(
+                username=env_user,
+                defaults={
+                    'password_hash': hash_password(env_pass),
+                    'role': 'master',
+                    'display_name': display,
+                    'is_active': True,
+                }
+            )
+            # Ensure role/display stay consistent
+            changed = False
+            if admin.role != 'master':
+                admin.role = 'master'
+                changed = True
+            if display and (admin.display_name or '') != display:
+                admin.display_name = display
+                changed = True
+            if not admin.is_active:
+                admin.is_active = True
+                changed = True
+            if changed:
+                admin.save(update_fields=['role', 'display_name', 'is_active'])
+            return (True, 'master', admin.pk, display)
     
     # Check database AdminUser
     try:
@@ -92,6 +115,22 @@ def is_elevated(request):
     return request.session.get('admin_role') in ('master', 'admin')
 
 
+def is_consultant_mode(request) -> bool:
+    """Session toggle: when on, filter UI to responsible services only."""
+    return bool(request.session.get('consultant_mode', False))
+
+
+def get_responsible_service_slugs(request):
+    """Return list of service slugs current admin is responsible for."""
+    admin = get_current_admin(request)
+    if not admin:
+        return []
+    try:
+        return list(admin.responsible_services.values_list('slug', flat=True))
+    except Exception:
+        return []
+
+
 def get_unread_notification_count(admin_id):
     """Get count of unread notifications for an admin user."""
     if not admin_id:
@@ -128,6 +167,7 @@ def session_ctx(request):
         'session_admin_id': admin_id,
         'is_master': is_master(request),
         'is_elevated': is_elevated(request),
+        'consultant_mode': is_consultant_mode(request),
         'unread_notifications': get_unread_notification_count(admin_id),
         'theme_mode': theme_mode,
         'theme_name': theme_name,

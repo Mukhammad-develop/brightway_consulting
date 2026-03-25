@@ -14,7 +14,7 @@ from django.http import JsonResponse
 
 from core.models import TgUser, Case, Document, Payment, ServiceDefinition, AdminAssignment, ImportRequest
 from ..decorators import login_required, elevated_required
-from .helpers import session_ctx, get_file_refs_for_conversation, build_conversation_display, get_current_admin, is_elevated
+from .helpers import session_ctx, get_file_refs_for_conversation, build_conversation_display, get_current_admin, is_elevated, is_consultant_mode, get_responsible_service_slugs
 
 
 def get_service_choices():
@@ -32,8 +32,16 @@ def cases_list(request):
     """
     context = session_ctx(request)
     
-    # Get all cases with related user
+    consultant_mode = is_consultant_mode(request)
+    slugs = get_responsible_service_slugs(request) if consultant_mode else []
+
+    # Get all cases with related user (optionally scoped in consultant mode)
     cases = Case.objects.select_related('user').order_by('-created_at')
+    if consultant_mode:
+        if slugs:
+            cases = cases.filter(service__in=slugs)
+        else:
+            cases = cases.none()
     
     # Search functionality
     search_query = request.GET.get('search', '').strip()
@@ -100,6 +108,11 @@ def case_detail(request, case_id):
     context = session_ctx(request)
     
     case = get_object_or_404(Case.objects.select_related('user'), pk=case_id)
+    if is_consultant_mode(request):
+        slugs = get_responsible_service_slugs(request)
+        if not slugs or case.service not in slugs:
+            messages.error(request, 'You can only view cases for services you are responsible for (Consultant Mode).')
+            return redirect('panel:cases_list')
     
     # Get case documents
     documents = Document.objects.filter(case=case).order_by('-uploaded_at')
@@ -270,6 +283,9 @@ def case_update(request, case_id):
 
 def _consultant_can_access_case(request, case):
     """Consultants may only toggle AI for cases of assigned users."""
+    if is_consultant_mode(request):
+        slugs = get_responsible_service_slugs(request)
+        return bool(slugs) and (case.service in slugs)
     if is_elevated(request):
         return True
     admin = get_current_admin(request)
