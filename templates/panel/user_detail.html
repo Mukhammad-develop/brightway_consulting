@@ -377,7 +377,8 @@
 .chat-file-actions { display: flex; gap: 0.35rem; margin-left: auto; }
 .msg-voice-bubble { padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
 .voice-player { display: block; height: 36px; min-width: 220px; max-width: 100%; border-radius: 20px; outline: none; }
-.voice-transcript { font-size: 0.82rem; color: var(--text-secondary); font-style: italic; line-height: 1.4; padding-top: 0.1rem; }
+.voice-transcript { font-size: 0.82rem; color: inherit; opacity: 0.85; font-style: italic; line-height: 1.4; padding-top: 0.2rem; border-top: 1px solid rgba(255,255,255,0.2); margin-top: 0.1rem; }
+.chat-msg.assistant .voice-transcript, .chat-msg.admin .voice-transcript { border-top-color: rgba(0,0,0,0.12); }
 .chat-inline-photo { display: block; max-width: 220px; max-height: 220px; border-radius: 10px; object-fit: cover; }
 .assign-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .form-select-sm { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
