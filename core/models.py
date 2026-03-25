@@ -5,7 +5,7 @@ All models are defined here to ensure proper relationships and organization.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.db import models
 
 
@@ -84,6 +84,8 @@ class Case(models.Model):
     conversation_history = models.TextField(default='[]')  # JSON list
     context = models.TextField(default='{}')  # JSON dict
     ai_enabled = models.BooleanField(default=True)  # Assistant can turn off; auto-off when info collected until case closed
+    last_user_message_at = models.DateTimeField(null=True, blank=True)
+    last_admin_message_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=datetime.now)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -123,7 +125,33 @@ class Case(models.Model):
             message['sender'] = sender
         conv.append(message)
         self.conversation_history = json.dumps(conv)
-        self.save(update_fields=['conversation_history', 'updated_at'])
+        # Track response SLA times and schedule reminders
+        now_dt = datetime.now()
+        update_fields = ['conversation_history', 'updated_at']
+        if role == 'user':
+            self.last_user_message_at = now_dt
+            update_fields.append('last_user_message_at')
+            # Schedule reminders only when case is assigned and AI is off (human should reply)
+            try:
+                if self.status == 'active' and self.assigned_to_id and not getattr(self, 'ai_enabled', True):
+                    from core.models import Reminder
+                    # Clear existing unsent no-reply reminders (only keep latest)
+                    Reminder.objects.filter(case=self, sent=False, reminder_type__in=['no_reply_3h', 'no_reply_10h']).delete()
+                    Reminder.objects.create(case=self, reminder_type='no_reply_3h', due_at=now_dt + timedelta(hours=3), sent=False)
+                    Reminder.objects.create(case=self, reminder_type='no_reply_10h', due_at=now_dt + timedelta(hours=10), sent=False)
+            except Exception:
+                pass
+        elif role == 'admin':
+            self.last_admin_message_at = now_dt
+            update_fields.append('last_admin_message_at')
+            # Cancel any pending no-reply reminders
+            try:
+                from core.models import Reminder
+                Reminder.objects.filter(case=self, sent=False, reminder_type__in=['no_reply_3h', 'no_reply_10h']).delete()
+            except Exception:
+                pass
+
+        self.save(update_fields=list(dict.fromkeys(update_fields)))
 
 
 class Document(models.Model):
