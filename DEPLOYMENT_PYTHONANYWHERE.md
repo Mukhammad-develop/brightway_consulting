@@ -124,6 +124,22 @@ Then in the Web app or a separate console, run the commands above (or configure 
 
 ---
 
+## 8. Scheduled reminders (cron job)
+
+The no-reply reminder system requires a cron job to run every 5 minutes.
+
+Go to **Tasks** tab on PythonAnywhere and add a **Scheduled task** with the following command (replace `abdurakhmon70` with your actual username):
+
+```
+/home/abdurakhmon70/brightway_consulting/venv/bin/python /home/abdurakhmon70/brightway_consulting/manage.py process_no_reply_reminders
+```
+
+Set it to run every **5 minutes** (minimum interval on paid accounts).
+
+> **Important**: Do NOT use `workon venv` or `cd ... && source venv/bin/activate` in cron — those require an interactive shell. Always use the **full path** to the Python binary inside the local `venv/` folder.
+
+---
+
 ## Troubleshooting
 
 - **500 error**: Check **Web → Logs → Error log**.
