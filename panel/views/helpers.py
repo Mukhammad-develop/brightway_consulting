@@ -206,11 +206,21 @@ def get_file_refs_for_conversation(case, conversation):
 
 
 def build_conversation_display(conversation, file_refs):
-    """Add file_info to each message that is a [FILE:...] reference."""
+    """
+    Add file_info to each message that is a [FILE:...] reference.
+    Also attaches voice transcription text (from the following
+    [Voice message]: ... entry) directly onto the voice file message
+    so they render as a single bubble.
+    """
     display = []
-    for msg in (conversation or []):
+    msgs = list(conversation or [])
+    skip_next = False
+    for i, msg in enumerate(msgs):
+        if skip_next:
+            skip_next = False
+            continue
         content = (msg.get('content') or '').strip()
-        item = {**msg, 'content': content, 'file_info': None}
+        item = {**msg, 'content': content, 'file_info': None, 'voice_transcription': None}
         if content.startswith('[FILE:') and content.endswith(']'):
             try:
                 parts = content[6:-1].split(':')
@@ -219,6 +229,12 @@ def build_conversation_display(conversation, file_refs):
                     if item['file_info']:
                         item['file_filename'] = item['file_info'].get('filename') or parts[1]
                         item['file_media_type'] = item['file_info'].get('media_type') or parts[2]
+                        # Attach next message if it is the transcription for this voice
+                        if item['file_media_type'] == 'voice' and i + 1 < len(msgs):
+                            next_content = (msgs[i + 1].get('content') or '').strip()
+                            if next_content.startswith('[Voice message]:'):
+                                item['voice_transcription'] = next_content[len('[Voice message]:'):].strip()
+                                skip_next = True
             except Exception:
                 pass
         display.append(item)

@@ -162,6 +162,9 @@
                                            src="{% url 'panel:file_view' msg.file_info.id %}">
                                         <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1">Download audio</a>
                                     </audio>
+                                    {% if msg.voice_transcription %}
+                                    <div class="voice-transcript">{{ msg.voice_transcription }}</div>
+                                    {% endif %}
                                 </div>
                                 {% elif msg.file_media_type == 'photo' %}
                                 <div class="msg-bubble msg-file-bubble">
@@ -372,8 +375,9 @@
 .chat-file-icon { font-size: 1.25rem; }
 .chat-file-name { font-size: 0.9rem; word-break: break-all; }
 .chat-file-actions { display: flex; gap: 0.35rem; margin-left: auto; }
-.msg-voice-bubble { padding: 0.4rem 0.6rem; background: transparent !important; box-shadow: none !important; }
+.msg-voice-bubble { padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
 .voice-player { display: block; height: 36px; min-width: 220px; max-width: 100%; border-radius: 20px; outline: none; }
+.voice-transcript { font-size: 0.82rem; color: var(--text-secondary); font-style: italic; line-height: 1.4; padding-top: 0.1rem; }
 .chat-inline-photo { display: block; max-width: 220px; max-height: 220px; border-radius: 10px; object-fit: cover; }
 .assign-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .form-select-sm { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
