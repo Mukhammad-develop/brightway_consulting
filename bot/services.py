@@ -684,48 +684,28 @@ def _transcribe_via_whisper(file_path: Path, lang_code: str = '') -> str:
                 pass
 
 
-# Common Uzbek word/pattern fragments used to validate Uzbek transcription results
-_UZ_PATTERNS = frozenset([
-    'men', 'sen', 'biz', 'siz', 'ular', 'bu', 'va', 'ham', 'bir',
-    'uchun', 'bilan', 'kerak', 'qil', 'emas', 'ha', 'yo', 'nima',
-    'qanday', 'hozir', 'lekin', 'agar', 'yoq', "yo'q", 'ish', 'uy',
-    'viza', 'soliq', 'talaba', 'pul', 'xat', 'hujjat',
-    "o'z", "o'g", 'sh', 'ch', 'ng',
-])
-
-
-def _looks_sensible(text: str, expected_lang: str) -> bool:
+def _looks_sensible(text: str) -> bool:
     """
-    Heuristic: does this transcription result look plausible for the expected language?
-
-    - Any lang: must have at least 2 words.
-    - Uzbek expected: result must contain at least one recognisable Uzbek
-      word/pattern, otherwise it is likely Whisper hallucinating English.
+    Minimal sanity check: transcription must have at least 2 words and
+    not be pure punctuation/numbers.
     """
     if not text or not text.strip():
         return False
-    words = text.strip().split()
-    if len(words) < 2:
-        return False
-    if expected_lang == 'uz':
-        low = text.lower()
-        return any(p in low for p in _UZ_PATTERNS)
-    return True
+    words = [w for w in text.strip().split() if any(c.isalpha() for c in w)]
+    return len(words) >= 2
 
 
 def transcribe_voice(file_path: str, language_hint: str = None) -> str:
     """
-    Transcribe voice/audio with smart primary/fallback routing.
+    Transcribe voice/audio.
 
-    Routing (based on user's chat language):
-      uz / unknown → Muxlisa primary, Whisper fallback
-      en / ru      → Whisper primary, Muxlisa fallback
+    Always tries Muxlisa first (catches Uzbek regardless of chat language
+    setting — most users of this service are Uzbek speakers even when their
+    chat language is English or Russian).  Falls back to Whisper with
+    auto-detection if Muxlisa returns nothing or gibberish.
 
-    After each attempt a sensibility check is run.  If both APIs produce
-    bad results, None is returned — callers should ask the user to type.
-
-    Returns:
-        Transcribed text, or None if all attempts fail.
+    Returns transcribed text, or None if all attempts fail (callers should
+    then ask the user to type).
     """
     file_path = Path(file_path)
     if not file_path.exists():
@@ -734,27 +714,25 @@ def transcribe_voice(file_path: str, language_hint: str = None) -> str:
 
     lang_code = (language_hint or '')[:2].lower()
 
-    if lang_code in ('en', 'ru'):
-        attempts = [
-            ('Whisper',  lambda: _transcribe_via_whisper(file_path, lang_code)),
-            ('Muxlisa',  lambda: _transcribe_via_muxlisa(file_path)),
-        ]
+    # Muxlisa first — always, regardless of chat language
+    muxlisa_result = _transcribe_via_muxlisa(file_path)
+    if muxlisa_result and _looks_sensible(muxlisa_result):
+        logger.info(f"[STT] Muxlisa accepted: {muxlisa_result[:60]!r}")
+        return muxlisa_result
+    if muxlisa_result:
+        logger.info(f"[STT] Muxlisa result failed sanity check ({muxlisa_result[:60]!r}), trying Whisper")
     else:
-        # uz or unknown — Muxlisa first (most users are Uzbek)
-        attempts = [
-            ('Muxlisa',  lambda: _transcribe_via_muxlisa(file_path)),
-            ('Whisper',  lambda: _transcribe_via_whisper(file_path, lang_code)),
-        ]
+        logger.info("[STT] Muxlisa returned nothing, trying Whisper")
 
-    for name, fn in attempts:
-        result = fn()
-        if result and _looks_sensible(result, lang_code):
-            logger.info(f"[STT] {name} accepted: {result[:60]!r}")
-            return result
-        if result:
-            logger.info(f"[STT] {name} result didn't pass sensibility check ({result[:60]!r}), trying next")
-        else:
-            logger.info(f"[STT] {name} returned nothing, trying next")
+    # Whisper fallback — no forced language hint so it auto-detects
+    whisper_result = _transcribe_via_whisper(file_path, lang_code)
+    if whisper_result and _looks_sensible(whisper_result):
+        logger.info(f"[STT] Whisper accepted: {whisper_result[:60]!r}")
+        return whisper_result
+    if whisper_result:
+        logger.info(f"[STT] Whisper result failed sanity check ({whisper_result[:60]!r})")
+    else:
+        logger.info("[STT] Whisper returned nothing")
 
     logger.warning("[STT] All transcription attempts failed — asking user to type")
     return None
