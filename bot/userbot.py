@@ -38,6 +38,7 @@ from .messages import t, get_all_languages, LANG_CALLBACKS
 from .services import (
     ai_detect_service, ask_ai, update_user_profile, should_update_profile,
     suggest_document_name, parse_filename_from_response,
+    transcribe_voice,
     READY_FOR_CONSULTANT_MARKER,
 )
 
@@ -599,12 +600,13 @@ def register_handlers(client: TelegramClient, account_index: int):
             # Download file
             filepath = UPLOADS_DIR / filename
             await client.download_media(event.media, filepath)
-            
-            # Add to conversation first so suggest_document_name has context
+
+            # Add file reference to conversation so suggest_document_name has context
             await run_sync(lambda: _add_message_to_case(
                 case.pk, 'user', f"[FILE:{unique_id}:{filename}:{media_type}]"
             ))
-            # Suggest display name and create document record (refetch case so conversation includes the file message)
+
+            # Suggest display name and create document record
             def create_doc_with_name():
                 from core.models import Case
                 c = Case.objects.get(pk=case.pk)
@@ -617,8 +619,27 @@ def register_handlers(client: TelegramClient, account_index: int):
                 )
             doc = await run_sync(create_doc_with_name)
 
-            # Acknowledge
-            await event.respond(t(lang, msg_key))
+            # --- Voice transcription ---
+            transcription = None
+            if media_type == 'voice':
+                await event.respond(t(lang, 'processing'))
+                transcription = await run_sync(lambda: transcribe_voice(str(filepath), lang))
+                if transcription:
+                    # Save transcription to document
+                    def save_transcription():
+                        doc.transcription = transcription
+                        doc.save(update_fields=['transcription'])
+                    await run_sync(save_transcription)
+                    # Add transcription as a proper user message so AI can read it
+                    await run_sync(lambda: _add_message_to_case(
+                        case.pk, 'user', f"[Voice message]: {transcription}"
+                    ))
+                    await event.respond(f"🎤 _{transcription}_", parse_mode='md')
+                else:
+                    await event.respond(t(lang, 'voice_received'))
+            else:
+                # Acknowledge non-voice media
+                await event.respond(t(lang, msg_key))
 
             # Show typing while AI is generating
             async def typing_loop_media():
@@ -627,8 +648,10 @@ def register_handlers(client: TelegramClient, account_index: int):
                     await asyncio.sleep(4)
 
             def get_ai_and_maybe_rename():
-                conv = case.get_conversation()
-                reply = ask_ai(conv, case.service, lang)
+                from core.models import Case as _Case
+                c = _Case.objects.get(pk=case.pk)
+                conv = c.get_conversation()
+                reply = ask_ai(conv, c.service, lang)
                 if not reply:
                     return None, None
                 cleaned, filename_label = parse_filename_from_response(reply)
