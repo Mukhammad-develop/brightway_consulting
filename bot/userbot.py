@@ -619,26 +619,22 @@ def register_handlers(client: TelegramClient, account_index: int):
                 )
             doc = await run_sync(create_doc_with_name)
 
-            # --- Voice transcription ---
+            # --- Voice transcription (silent — no intermediate messages) ---
             transcription = None
             if media_type == 'voice':
-                await event.respond(t(lang, 'processing'))
                 transcription = await run_sync(lambda: transcribe_voice(str(filepath), lang))
                 if transcription:
-                    # Save transcription to document
                     def save_transcription():
                         doc.transcription = transcription
                         doc.save(update_fields=['transcription'])
                     await run_sync(save_transcription)
-                    # Add transcription as a proper user message so AI can read it
+                    # Replace the raw [FILE:...] tag with the actual spoken text
                     await run_sync(lambda: _add_message_to_case(
                         case.pk, 'user', f"[Voice message]: {transcription}"
                     ))
-                    await event.respond(f"🎤 _{transcription}_", parse_mode='md')
-                else:
-                    await event.respond(t(lang, 'voice_received'))
+                # If transcription failed, AI still sees [FILE:...:voice] and can respond
             else:
-                # Acknowledge non-voice media
+                # Acknowledge non-voice media (photos, documents)
                 await event.respond(t(lang, msg_key))
 
             # Show typing while AI is generating

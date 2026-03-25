@@ -654,35 +654,15 @@ def handle_voice_message(message):
         doc.display_name = f"{suggested}_{user.telegram_id}{ext}" if suggested else f"voice_{user.telegram_id}{ext}"
         doc.save(update_fields=['display_name'])
         
-        # Send processing indicator
+        # Transcribe silently (no intermediate messages)
         bot.send_chat_action(message.chat.id, 'typing')
-        processing_msg = bot.send_message(message.chat.id, t(lang, 'processing'))
-        
-        # Transcribe the voice message
         transcription = transcribe_voice(str(filepath), lang)
-        
+
         if transcription:
-            # Save transcription to document
             doc.transcription = transcription
             doc.save(update_fields=['transcription'])
-            
-            # Add transcription as user message
             case.add_message('user', f"[Voice message]: {transcription}")
-            
-            # Delete processing message
-            try:
-                bot.delete_message(message.chat.id, processing_msg.message_id)
-            except:
-                pass
-            
-            # Send transcription confirmation
-            bot.send_message(
-                message.chat.id,
-                f"🎤 _{transcription}_\n\n" + t(lang, 'voice_received'),
-                parse_mode='Markdown'
-            )
-            
-            # Process transcription as regular message and get AI response (typing while AI runs)
+
             stop_typing = threading.Event()
             typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
             typing_thread.start()
@@ -695,15 +675,17 @@ def handle_voice_message(message):
                 doc.save(update_fields=['display_name'])
             if response:
                 bot.send_message(message.chat.id, response)
-            
         else:
-            # Transcription failed
+            # Transcription failed — AI sees the [FILE:...] tag and handles it
+            stop_typing = threading.Event()
+            typing_thread = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_typing), daemon=True)
+            typing_thread.start()
             try:
-                bot.delete_message(message.chat.id, processing_msg.message_id)
-            except:
-                pass
-            
-            bot.send_message(message.chat.id, t(lang, 'voice_received'))
+                response, _ = process_ai_response(user, case, '', lang)
+            finally:
+                stop_typing.set()
+            if response:
+                bot.send_message(message.chat.id, response)
         
         logger.info(f"Voice message from {user.telegram_id}: {filename}")
         
