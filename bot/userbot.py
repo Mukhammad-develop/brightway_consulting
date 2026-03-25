@@ -445,10 +445,23 @@ def register_handlers(client: TelegramClient, account_index: int):
             
             # Detect service with AI (Django ORM — must run in thread from async context)
             detected = await run_sync(lambda: ai_detect_service(text))
-            
+
             # Get or create case; AI handles conversation from the start (no auto hello)
             case = await run_sync(lambda: _get_or_open_case(user, detected or 'general'))
             await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
+
+            # Assign to responsible consultant as soon as service is known
+            if case.service != 'general' and not case.assigned_to:
+                def _early_assign():
+                    from core.models import Case
+                    from bot.bot import try_assign_case_to_consultant
+                    c = Case.objects.get(pk=case.pk)
+                    if c.service != 'general' and not c.assigned_to:
+                        try_assign_case_to_consultant(c, user)
+                try:
+                    await run_sync(_early_assign)
+                except Exception as e:
+                    logger.error(f"Early service assignment failed: {e}")
 
             # If AI is turned off for this case, no reply (consultant will reply later)
             if not getattr(case, 'ai_enabled', True):

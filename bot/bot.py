@@ -222,7 +222,8 @@ def _typing_loop(chat_id, stop_event, interval=4):
 
 def try_assign_case_to_consultant(case, user):
     """
-    Assign case to a consultant when AI has finished collecting information.
+    Assign case to the consultant responsible for case.service (least-loaded, round-robin).
+    Called both when service is first detected AND when AI finishes collecting info.
     Sets case.assigned_to and ensures AdminAssignment exists for the user.
     """
     from django.db.models import Count
@@ -555,6 +556,13 @@ def handle_text_message(message):
             case.save(update_fields=['service'])
             print(f"[BOT] handle_text: updated case.service to {case.service!r}")
             logger.info(f"[BOT] handle_text: updated case.service to {case.service!r}")
+
+        # Assign to responsible consultant as soon as service is known
+        if case.service != 'general' and not case.assigned_to:
+            try:
+                try_assign_case_to_consultant(case, user)
+            except Exception as e:
+                logger.error(f"Early service assignment failed: {e}")
 
         print(f"[BOT] handle_text: before process_ai_response case.service={case.service!r}")
         logger.info(f"[BOT] handle_text: before process_ai_response case.service={case.service!r}")
