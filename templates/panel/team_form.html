@@ -122,9 +122,15 @@
 .assignment-item:last-child { border-bottom: none; }
 .assignment-date { font-size: 0.8rem; color: var(--text-muted); }
 .muted { color: var(--text-muted); font-size: 0.9rem; }
-.service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
-.service-chip { display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); cursor: pointer; }
-.service-chip input { margin: 0; }
-.chip-text { font-size: 0.95rem; color: var(--text-primary); }
+.service-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.service-chip { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.75rem 0.9rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); cursor: pointer; }
+.service-chip input { margin: 0.15rem 0 0 0; flex: 0 0 auto; }
+.chip-text { font-size: 0.95rem; color: var(--text-primary); line-height: 1.25; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+.service-chip:hover { background: var(--bg-elevated); border-color: rgba(255, 255, 255, 0.14); }
+.service-chip:has(input:checked) { border-color: rgba(255, 255, 255, 0.18); box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.18) inset; }
+
+@media (max-width: 720px) {
+  .service-grid { grid-template-columns: 1fr; }
+}
 </style>
 {% endblock %}
