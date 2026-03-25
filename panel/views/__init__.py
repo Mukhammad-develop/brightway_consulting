@@ -13,3 +13,4 @@ from . import reports
 from . import notifications
 from . import team
 from . import import_chat
+from . import groups

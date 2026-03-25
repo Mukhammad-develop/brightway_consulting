@@ -576,3 +576,60 @@ class AiReport(models.Model):
             return json.loads(self.stats or '{}')
         except (json.JSONDecodeError, TypeError):
             return {}
+
+
+# ============== Group Chat Monitoring ==============
+
+class GroupChat(models.Model):
+    """A Telegram group/supergroup whose messages the bot monitors."""
+
+    LANGUAGE_CHOICES = [('uz', 'Uzbek'), ('ru', 'Russian'), ('en', 'English')]
+
+    group_id = models.BigIntegerField(unique=True, help_text='Telegram chat ID (negative for supergroups)')
+    title = models.CharField(max_length=255, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    language = models.CharField(max_length=10, default='uz', choices=LANGUAGE_CHOICES,
+                                help_text='Default language for bot replies in this group')
+    cooldown_hours = models.PositiveIntegerField(default=24,
+                                                 help_text='Hours before the bot re-engages the same user')
+    behavior_prompt = models.TextField(blank=True, default='',
+                                       help_text='AI instructions for what topics to handle in this group')
+    created_at = models.DateTimeField(default=datetime.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'group_chats'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title or str(self.group_id)
+
+
+class GroupBotMessage(models.Model):
+    """Tracks messages sent by the userbot in a group, to detect replies."""
+
+    group = models.ForeignKey(GroupChat, on_delete=models.CASCADE, related_name='bot_messages')
+    message_id = models.BigIntegerField()
+    triggered_by_user_id = models.BigIntegerField(null=True, blank=True,
+                                                   help_text='User whose message triggered this bot reply')
+    created_at = models.DateTimeField(default=datetime.now)
+
+    class Meta:
+        db_table = 'group_bot_messages'
+        unique_together = [('group', 'message_id')]
+
+
+class GroupCooldown(models.Model):
+    """Per-user cooldown in a group — prevents spamming the same person."""
+
+    group = models.ForeignKey(GroupChat, on_delete=models.CASCADE, related_name='cooldowns')
+    user_tg_id = models.BigIntegerField()
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(default=datetime.now)
+
+    class Meta:
+        db_table = 'group_cooldowns'
+        unique_together = [('group', 'user_tg_id')]
+
+    def is_active(self):
+        return datetime.now() < self.expires_at.replace(tzinfo=None) if self.expires_at.tzinfo else datetime.now() < self.expires_at

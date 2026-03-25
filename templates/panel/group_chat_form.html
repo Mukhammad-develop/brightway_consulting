@@ -1,0 +1,81 @@
+{% extends "panel/base.html" %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">{{ page_title }}</h1>
+    <a href="{% url 'panel:group_chats' %}" class="btn btn-outline">← Back</a>
+</div>
+
+<div class="panel-card" style="max-width:700px;">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+
+            {% if action == 'add' %}
+            <div class="form-group">
+                <label class="form-label">Telegram Group ID <span style="color:var(--danger)">*</span></label>
+                <input type="text" name="group_id" class="form-input" placeholder="-1001234567890"
+                       value="{{ request.POST.group_id|default:'' }}" required>
+                <small class="form-hint">Negative number for supergroups. Forward any message from the group to
+                    <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a> to get the ID.</small>
+            </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label class="form-label">Title / Name</label>
+                <input type="text" name="title" class="form-input" placeholder="e.g. Brightway Community"
+                       value="{{ group.title|default:request.POST.title|default:'' }}">
+            </div>
+
+            <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group">
+                    <label class="form-label">Default Reply Language</label>
+                    <select name="language" class="form-input">
+                        {% for code, label in lang_choices %}
+                        <option value="{{ code }}"
+                            {% if group.language == code or request.POST.language == code %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cooldown (hours)</label>
+                    <input type="number" name="cooldown_hours" class="form-input" min="1" max="168"
+                           value="{{ group.cooldown_hours|default:request.POST.cooldown_hours|default:'24' }}">
+                    <small class="form-hint">How long before the bot re-engages the same user.</small>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Behavior Prompt</label>
+                <textarea name="behavior_prompt" class="form-input" rows="7"
+                          placeholder="Describe what topics the AI should handle in this group and how it should respond. Example: This is a student visa community. Only answer questions about UK student visas, university applications, and related documents. Do not discuss tax topics.">{{ group.behavior_prompt|default:request.POST.behavior_prompt|default:'' }}</textarea>
+                <small class="form-hint">The AI will strictly follow these instructions when responding in this group.</small>
+            </div>
+
+            <div class="form-group">
+                <label class="form-check">
+                    <input type="checkbox" name="is_active"
+                           {% if action == 'add' or group.is_active %}checked{% endif %}>
+                    <span>Active (bot monitors and responds)</span>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    {% if action == 'add' %}Add Group{% else %}Save Changes{% endif %}
+                </button>
+                <a href="{% url 'panel:group_chats' %}" class="btn btn-outline">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.form-hint { display:block; font-size:0.78rem; color:var(--text-muted); margin-top:0.3rem; }
+.form-check { display:flex; align-items:center; gap:0.5rem; cursor:pointer; }
+.form-actions { display:flex; gap:0.75rem; margin-top:1.5rem; }
+</style>
+{% endblock %}

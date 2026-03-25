@@ -1,0 +1,95 @@
+{% extends "panel/base.html" %}
+{% block page_title %}Group Chats{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Group Chats</h1>
+    <a href="{% url 'panel:group_chat_add' %}" class="btn btn-primary">+ Add Group</a>
+</div>
+
+<div class="panel-card">
+    <div class="card-body">
+        {% if groups %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Group ID</th>
+                    <th>Title</th>
+                    <th>Language</th>
+                    <th>Cooldown</th>
+                    <th>Active Cooldowns</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in groups %}
+                <tr>
+                    <td><code>{{ g.group_id }}</code></td>
+                    <td>{{ g.title|default:"—" }}</td>
+                    <td>{{ g.get_language_display }}</td>
+                    <td>{{ g.cooldown_hours }}h</td>
+                    <td>{{ g.active_cooldowns }}</td>
+                    <td>
+                        {% if g.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-muted">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-row">
+                            <a href="{% url 'panel:group_chat_edit' g.pk %}" class="btn btn-xs btn-outline">Edit</a>
+                            <form method="post" action="{% url 'panel:group_chat_toggle' g.pk %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs btn-outline">
+                                    {% if g.is_active %}Disable{% else %}Enable{% endif %}
+                                </button>
+                            </form>
+                            {% if g.active_cooldowns %}
+                            <form method="post" action="{% url 'panel:group_chat_clear_cooldowns' g.pk %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs btn-outline" title="Clear all cooldowns">Clear CD</button>
+                            </form>
+                            {% endif %}
+                            <form method="post" action="{% url 'panel:group_chat_delete' g.pk %}" style="display:inline;"
+                                  onsubmit="return confirm('Delete this group?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs btn-danger">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <p>No group chats tracked yet.</p>
+            <a href="{% url 'panel:group_chat_add' %}" class="btn btn-primary">Add your first group</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel-card" style="margin-top:1.5rem;">
+    <div class="card-header"><h3>How it works</h3></div>
+    <div class="card-body" style="font-size:0.9rem;line-height:1.7;color:var(--text-secondary);">
+        <ul style="margin:0;padding-left:1.25rem;">
+            <li>Add the Telegram group/supergroup ID (negative number for supergroups, e.g. <code>-1001234567890</code>).</li>
+            <li>When a member asks about our services the bot replies with a DM invitation.</li>
+            <li>That user is put in a <strong>cooldown</strong> — the bot won't respond to them again until it expires.</li>
+            <li>If the user replies to the bot's message the cooldown is cancelled immediately.</li>
+            <li>If <em>someone else</em> replies to the bot's message the bot gives a short answer and redirects to DM.</li>
+            <li>The <strong>Behavior Prompt</strong> defines what topics the AI handles in this specific group.</li>
+        </ul>
+    </div>
+</div>
+
+<style>
+.action-row { display:flex; gap:0.35rem; flex-wrap:wrap; }
+.badge { display:inline-block; padding:0.2rem 0.55rem; border-radius:999px; font-size:0.75rem; font-weight:600; }
+.badge-success { background:rgba(34,197,94,0.15); color:#22c55e; }
+.badge-muted { background:var(--bg-tertiary); color:var(--text-muted); }
+</style>
+{% endblock %}

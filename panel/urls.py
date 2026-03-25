@@ -3,7 +3,7 @@ URL configuration for admin panel.
 """
 
 from django.urls import path
-from .views import auth, dashboard, users, cases, files, services, reports, notifications, team, import_chat
+from .views import auth, dashboard, users, cases, files, services, reports, notifications, team, import_chat, groups
 
 app_name = 'panel'
 
@@ -89,6 +89,14 @@ urlpatterns = [
     path('admin/team/<int:admin_id>/assignments', team.team_assignments, name='team_assignments'),
     path('admin/team/<int:admin_id>/reset-password', team.reset_password, name='team_reset_password'),
     
+    # Group Chat Monitoring (elevated users only)
+    path('admin/group-chats', groups.group_chats_list, name='group_chats'),
+    path('admin/group-chats/add', groups.group_chat_add, name='group_chat_add'),
+    path('admin/group-chats/<int:group_id>/edit', groups.group_chat_edit, name='group_chat_edit'),
+    path('admin/group-chats/<int:group_id>/delete', groups.group_chat_delete, name='group_chat_delete'),
+    path('admin/group-chats/<int:group_id>/toggle', groups.group_chat_toggle, name='group_chat_toggle'),
+    path('admin/group-chats/<int:group_id>/clear-cooldowns', groups.group_chat_clear_cooldowns, name='group_chat_clear_cooldowns'),
+
     # Import Chat (elevated users only)
     path('admin/import-chat', import_chat.import_chat_list, name='import_chat'),
     path('admin/import-chat/<int:import_id>/status', import_chat.import_status, name='import_status'),

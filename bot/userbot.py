@@ -39,6 +39,7 @@ from .services import (
     ai_detect_service, ask_ai, update_user_profile, should_update_profile,
     suggest_document_name, parse_filename_from_response,
     transcribe_voice,
+    group_is_relevant, group_dm_invite_message, group_answer_question,
     READY_FOR_CONSULTANT_MARKER,
 )
 
@@ -277,7 +278,8 @@ def get_language_buttons():
 
 def register_handlers(client: TelegramClient, account_index: int):
     """Register event handlers for a client."""
-    
+    _register_group_handlers(client, account_index)
+
     @client.on(events.NewMessage(pattern='/start', incoming=True))
     async def handle_start(event):
         """Handle /start command."""
@@ -677,6 +679,126 @@ def register_handlers(client: TelegramClient, account_index: int):
             
         except Exception as e:
             logger.error(f"Error handling media: {e}")
+
+
+# ============== Group Chat Monitoring ==============
+
+def _register_group_handlers(client, account_index):
+    """Register handlers for monitored group chats on a client."""
+
+    @client.on(events.NewMessage(incoming=True))
+    async def handle_group_message(event):
+        # Only handle group/supergroup messages
+        if not event.is_group:
+            return
+
+        chat_id = event.chat_id
+
+        # Check if this group is tracked
+        def get_group():
+            from core.models import GroupChat
+            return GroupChat.objects.filter(group_id=chat_id, is_active=True).first()
+
+        group = await run_sync(get_group)
+        if not group:
+            return
+
+        sender = await event.get_sender()
+        if not sender or getattr(sender, 'bot', False):
+            return
+
+        user_id = sender.id
+        lang = group.language
+        text = (event.text or '').strip()
+
+        try:
+            # ---- Case 1: Someone replied to one of our messages ----
+            if event.reply_to_msg_id:
+                def check_bot_message():
+                    from core.models import GroupBotMessage
+                    return GroupBotMessage.objects.filter(
+                        group=group, message_id=event.reply_to_msg_id
+                    ).first()
+
+                bot_msg = await run_sync(check_bot_message)
+                if bot_msg:
+                    original_user = bot_msg.triggered_by_user_id
+                    if original_user and user_id == original_user:
+                        # Original user replied → cancel their cooldown
+                        def cancel_cooldown():
+                            from core.models import GroupCooldown
+                            GroupCooldown.objects.filter(group=group, user_tg_id=user_id).delete()
+                        await run_sync(cancel_cooldown)
+                        logger.info(f"[Group {chat_id}] User {user_id} replied → cooldown lifted")
+                        return
+                    else:
+                        # Someone else replied → answer briefly + DM redirect
+                        if not text:
+                            return
+                        reply_text = await run_sync(
+                            lambda: group_answer_question(text, group.behavior_prompt, lang)
+                        )
+                        if reply_text:
+                            sent = await event.reply(reply_text)
+                            def save_bot_msg_reply():
+                                from core.models import GroupBotMessage
+                                GroupBotMessage.objects.get_or_create(
+                                    group=group, message_id=sent.id,
+                                    defaults={'triggered_by_user_id': user_id}
+                                )
+                            await run_sync(save_bot_msg_reply)
+                            logger.info(f"[Group {chat_id}] Answered follow-up from {user_id}")
+                        return
+
+            # ---- Case 2: Regular message — check cooldown ----
+            def check_cooldown():
+                from core.models import GroupCooldown
+                from datetime import datetime as _dt
+                cd = GroupCooldown.objects.filter(group=group, user_tg_id=user_id).first()
+                if cd:
+                    expires = cd.expires_at.replace(tzinfo=None) if cd.expires_at.tzinfo else cd.expires_at
+                    if _dt.now() < expires:
+                        return True  # still in cooldown
+                    cd.delete()
+                return False
+
+            in_cooldown = await run_sync(check_cooldown)
+            if in_cooldown:
+                return
+
+            if not text:
+                return
+
+            # ---- Case 3: Detect if message is about our services ----
+            is_relevant = await run_sync(
+                lambda: group_is_relevant(text, group.behavior_prompt)
+            )
+            if not is_relevant:
+                return
+
+            # ---- Respond with DM invitation ----
+            invite = group_dm_invite_message(lang)
+            sent = await event.reply(invite)
+
+            # Track bot message + set cooldown
+            def save_cooldown_and_msg():
+                from core.models import GroupBotMessage, GroupCooldown
+                from datetime import datetime as _dt, timedelta
+                GroupBotMessage.objects.get_or_create(
+                    group=group, message_id=sent.id,
+                    defaults={'triggered_by_user_id': user_id}
+                )
+                expires = _dt.now() + timedelta(hours=group.cooldown_hours)
+                GroupCooldown.objects.update_or_create(
+                    group=group, user_tg_id=user_id,
+                    defaults={'expires_at': expires}
+                )
+
+            await run_sync(save_cooldown_and_msg)
+            logger.info(f"[Group {chat_id}] Invited {user_id} to DM, cooldown {group.cooldown_hours}h")
+
+        except Exception as e:
+            logger.error(f"[Group {chat_id}] Error in group handler: {e}")
 
 
 # ============== Queue Processing ==============

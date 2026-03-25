@@ -1174,3 +1174,90 @@ def get_fallback_response(lang: str = 'en') -> str:
         'uz': "Kechirasiz, so'rovingizni qayta ishlashda muammo yuz berdi. Iltimos, bir daqiqadan keyin qayta urinib ko'ring yoki veb-saytimiz orqali biz bilan bog'laning."
     }
     return fallbacks.get(lang, fallbacks['en'])
+
+
+# ============== Group Chat AI ==============
+
+_GROUP_RELEVANCE_SYSTEM = """You are a filter for a UK consulting firm's Telegram group chat.
+Decide if the user's message is asking about or expressing interest in any of these services:
+- Student visa / university application
+- PAYE tax refund
+- Self Assessment tax return
+- Company accounting / bookkeeping
+- Schengen / tourist / work visa
+
+Reply with ONLY "yes" or "no". No other text."""
+
+_GROUP_DM_INVITE = {
+    'uz': "Salom! Sizga yordam berishga tayyormiz. Batafsil ma'lumot va shaxsiy maslahat uchun iltimos shaxsiy xabarga yozing 👇 @BrightwayConsulting",
+    'ru': "Привет! Мы готовы помочь. Для подробной информации и личной консультации, пожалуйста, напишите нам в личные сообщения 👇 @BrightwayConsulting",
+    'en': "Hi! We're happy to help. For detailed information and a personal consultation, please message us directly 👇 @BrightwayConsulting",
+}
+
+_GROUP_ANSWER_SYSTEM = """You are a polite assistant for Brightway Consulting, a UK-based consulting firm.
+You are answering a question in a PUBLIC Telegram group chat.
+
+RULES — follow strictly:
+1. Only answer questions about: student visas, PAYE tax refunds, Self Assessment tax,
+   company accounting, Schengen/tourist visas.
+2. NEVER ask for or collect personal information (name, passport, address, finances etc.).
+   If the question requires personal details to answer, say it must be handled in private chat.
+3. Keep the answer SHORT (2-4 sentences). Redirect to private DM for full consultation.
+4. If the question is completely off-topic (maths, general knowledge, coding, etc.),
+   politely decline: "Sorry, I can only help with our consulting services."
+5. End every reply with a short invitation to DM for details.
+6. Reply in the same language as the user's message.
+
+{extra}"""
+
+
+def group_is_relevant(text: str, behavior_prompt: str = '') -> bool:
+    """Return True if the message is asking about our consulting services."""
+    client = get_openai_client()
+    if not client:
+        return False
+    system = _GROUP_RELEVANCE_SYSTEM
+    if behavior_prompt:
+        system += f"\n\nGroup context:\n{behavior_prompt}"
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[{'role': 'system', 'content': system}, {'role': 'user', 'content': text}],
+            max_tokens=5,
+            temperature=0,
+        )
+        return resp.choices[0].message.content.strip().lower().startswith('yes')
+    except Exception as e:
+        logger.error(f"group_is_relevant error: {e}")
+        return False
+
+
+def group_dm_invite_message(lang: str = 'uz') -> str:
+    """Return a canned DM invitation in the right language."""
+    return _GROUP_DM_INVITE.get(lang, _GROUP_DM_INVITE['en'])
+
+
+def group_answer_question(text: str, behavior_prompt: str = '', lang: str = 'uz') -> str:
+    """
+    Generate a brief, on-topic answer for a group question.
+    Appends a DM redirect. Returns None if the question is out of scope.
+    """
+    client = get_openai_client()
+    if not client:
+        return None
+    extra = f"Group-specific instructions:\n{behavior_prompt}" if behavior_prompt else ''
+    system = _GROUP_ANSWER_SYSTEM.format(extra=extra).strip()
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': system},
+                {'role': 'user', 'content': text},
+            ],
+            max_tokens=300,
+            temperature=0.4,
+        )
+        return (resp.choices[0].message.content or '').strip() or None
+    except Exception as e:
+        logger.error(f"group_answer_question error: {e}")
+        return None
