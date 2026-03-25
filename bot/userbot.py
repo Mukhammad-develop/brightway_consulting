@@ -549,23 +549,28 @@ def register_handlers(client: TelegramClient, account_index: int):
             case = await run_sync(lambda: _get_or_open_case(user, 'general'))
             conv = await run_sync(lambda: case.get_conversation())
             
-            # First message is media (e.g. sticker): add label, get AI reply, send — no download
-            if len(conv) == 0:
-                label = _first_media_label(event.media)  # e.g. "[Sticker]"
-                await run_sync(lambda: _add_message_to_case(case.pk, 'user', label))
-                def _first_media_ai():
-                    from core.models import Case
-                    c = Case.objects.get(pk=case.pk)
-                    return ask_ai(c.get_conversation(), c.service, lang)
-                reply = await run_sync(_first_media_ai)
-                if reply:
-                    to_send = reply.replace(READY_FOR_CONSULTANT_MARKER, '').strip()
-                    await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', to_send))
-                    await event.respond(to_send)
-                else:
-                    await event.respond(t(lang, 'ai_error'))
-                logger.info(f"[Account {account_index}] First message from {sender.id} was media ({label}): AI replied")
-                return
+            # First message shortcut applies only to stickers.
+            # Voice/photo/document must go through the normal download flow
+            # so voice can be transcribed and files can be saved correctly.
+            if len(conv) == 0 and isinstance(event.media, MessageMediaDocument):
+                doc0 = event.media.document
+                attrs0 = getattr(doc0, 'attributes', []) or []
+                if any(isinstance(a, DocumentAttributeSticker) for a in attrs0):
+                    label = _first_media_label(event.media)  # "[Sticker]"
+                    await run_sync(lambda: _add_message_to_case(case.pk, 'user', label))
+                    def _first_media_ai():
+                        from core.models import Case
+                        c = Case.objects.get(pk=case.pk)
+                        return ask_ai(c.get_conversation(), c.service, lang)
+                    reply = await run_sync(_first_media_ai)
+                    if reply:
+                        to_send = reply.replace(READY_FOR_CONSULTANT_MARKER, '').strip()
+                        await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', to_send))
+                        await event.respond(to_send)
+                    else:
+                        await event.respond(t(lang, 'ai_error'))
+                    logger.info(f"[Account {account_index}] First message from {sender.id} was sticker: AI replied")
+                    return
             
             # Download media
             unique_id = str(uuid4())[:8]
