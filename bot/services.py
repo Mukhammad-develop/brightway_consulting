@@ -231,7 +231,18 @@ def ai_detect_service(text: str, conversation_history: list = None) -> str:
     if not client:
         return None
     
-    system_prompt = """You are a service classifier for a UK consulting firm.
+    # Allow master/admin to override classifier prompt from DB
+    system_prompt = None
+    try:
+        from core.models import AiSettings
+        s = AiSettings.objects.order_by('-updated_at').first()
+        if s and (s.service_classifier_prompt or '').strip():
+            system_prompt = (s.service_classifier_prompt or '').strip()
+    except Exception:
+        system_prompt = None
+
+    if not system_prompt:
+        system_prompt = """You are a service classifier for a UK consulting firm.
 Based on the user message, determine which service they need:
 - "student" - Student visa, university applications, educational guidance
 - "paye" - PAYE tax refund, employed tax returns, P45/P60

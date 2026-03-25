@@ -257,6 +257,21 @@ class ServiceDefinition(models.Model):
             return []
 
 
+class AiSettings(models.Model):
+    """
+    Global AI settings editable from the panel.
+    Stored in DB so master/admin can tune prompts without deploy.
+    """
+    service_classifier_prompt = models.TextField(blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ai_settings'
+
+    def __str__(self):
+        return f"AI Settings (updated {self.updated_at})"
+
+
 class ServiceStep(models.Model):
     """Service step for tracking progress through a service workflow."""
     

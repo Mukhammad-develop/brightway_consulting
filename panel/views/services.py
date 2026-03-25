@@ -26,6 +26,28 @@ STEP_ICONS = {
 @elevated_required
 def services_list(request):
     """List all service definitions."""
+    from core.models import AiSettings
+
+    # Update global AI settings or load defaults
+    if request.method == 'POST':
+        action = request.POST.get('action', '').strip()
+        if action == 'update_ai':
+            prompt = (request.POST.get('service_classifier_prompt') or '').strip()
+            s, _ = AiSettings.objects.get_or_create(pk=1)
+            s.service_classifier_prompt = prompt
+            s.save()
+            messages.success(request, 'AI service classifier prompt updated.')
+            return redirect('panel:services_list')
+        if action == 'load_defaults':
+            from django.core.management import call_command
+            try:
+                call_command('load_ai_services')
+                messages.success(request, 'Default services and AI prompts loaded.')
+            except Exception as e:
+                messages.error(request, f'Failed to load defaults: {e}')
+            return redirect('panel:services_list')
+
+    ai_settings, _ = AiSettings.objects.get_or_create(pk=1)
     services = ServiceDefinition.objects.prefetch_related('steps').all()
     
     # Count cases per service
@@ -43,8 +65,9 @@ def services_list(request):
         })
     
     context = {
-        'page_title': 'Service Management',
+        'page_title': 'Services & AI',
         'services': service_data,
+        'ai_settings': ai_settings,
         **session_ctx(request),
     }
     return render(request, 'panel/services_list.html', context)
