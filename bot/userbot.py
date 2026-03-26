@@ -38,7 +38,7 @@ from .messages import t, get_all_languages, LANG_CALLBACKS
 from .services import (
     ai_detect_service, ask_ai, update_user_profile, should_update_profile,
     suggest_document_name, parse_filename_from_response,
-    transcribe_voice,
+    transcribe_voice, is_ai_master_enabled,
     group_is_relevant, group_dm_invite_message, group_answer_question,
     READY_FOR_CONSULTANT_MARKER,
 )
@@ -463,8 +463,8 @@ def register_handlers(client: TelegramClient, account_index: int):
                 except Exception as e:
                     logger.error(f"Early service assignment failed: {e}")
 
-            # If AI is turned off for this case, no reply (consultant will reply later)
-            if not getattr(case, 'ai_enabled', True):
+            # Global master switch or per-case toggle — no reply if either is off
+            if not is_ai_master_enabled() or not getattr(case, 'ai_enabled', True):
                 return
 
             # Show typing while AI is generating (Telegram typing lasts ~5s, repeat every 4s)

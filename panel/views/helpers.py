@@ -159,6 +159,15 @@ def session_ctx(request):
             request.session.setdefault('theme_light', 'blue')
     theme_mode = request.session.get('theme_mode', 'dark')
     theme_name = request.session.get('theme_dark', 'blue') if theme_mode == 'dark' else request.session.get('theme_light', 'blue')
+    # Read global AI master switch
+    try:
+        from core.models import AiSettings
+        from django.db.utils import OperationalError as _OE
+        _ai_master = AiSettings.objects.filter(pk=1).values_list('ai_master_enabled', flat=True).first()
+        ai_master_enabled = _ai_master if _ai_master is not None else True
+    except Exception:
+        ai_master_enabled = True
+
     return {
         'session_admin_logged_in': request.session.get('admin_logged_in', False),
         'session_admin_username': request.session.get('admin_username', ''),
@@ -171,6 +180,7 @@ def session_ctx(request):
         'unread_notifications': get_unread_notification_count(admin_id),
         'theme_mode': theme_mode,
         'theme_name': theme_name,
+        'ai_master_enabled': ai_master_enabled,
     }
 
 

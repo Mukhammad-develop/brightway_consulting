@@ -10,8 +10,8 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST, require_http_methods
 from django.db.utils import OperationalError
 
-from core.models import ServiceDefinition, ServiceStep, Case
-from ..decorators import login_required, elevated_required
+from core.models import ServiceDefinition, ServiceStep, Case, AiSettings
+from ..decorators import login_required, elevated_required, master_required
 from .helpers import session_ctx
 
 # Step slug -> emoji for services list preview
@@ -83,9 +83,27 @@ def services_list(request):
         'page_title': 'Services & AI',
         'services': service_data,
         'ai_settings': ai_settings,
+        'ai_master_enabled': getattr(ai_settings, 'ai_master_enabled', True),
         **session_ctx(request),
     }
     return render(request, 'panel/services_list.html', context)
+
+
+@login_required
+@elevated_required
+def ai_master_toggle(request):
+    """Toggle the global AI master switch."""
+    if request.method != 'POST':
+        return redirect('panel:services_list')
+    try:
+        s, _ = AiSettings.objects.get_or_create(pk=1)
+        s.ai_master_enabled = not s.ai_master_enabled
+        s.save(update_fields=['ai_master_enabled'])
+        status = 'enabled' if s.ai_master_enabled else 'disabled'
+        messages.success(request, f'Global AI {status} for all chats.')
+    except Exception as e:
+        messages.error(request, f'Failed to toggle AI: {e}')
+    return redirect('panel:services_list')
 
 
 @login_required

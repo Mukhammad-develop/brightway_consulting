@@ -290,6 +290,10 @@ class AiSettings(models.Model):
     Global AI settings editable from the panel.
     Stored in DB so master/admin can tune prompts without deploy.
     """
+    # Master AI on/off switch — overrides all per-case ai_enabled flags
+    ai_master_enabled = models.BooleanField(default=True,
+        help_text='Global AI switch. When OFF the bot never calls OpenAI, regardless of per-chat settings.')
+
     # Classifier prompt (optional override). If blank, classifier can be auto-built from ServiceDefinition keywords.
     service_classifier_prompt = models.TextField(blank=True, default='')
 

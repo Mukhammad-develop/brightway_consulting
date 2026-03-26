@@ -34,6 +34,16 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 UPLOADS_DIR = PROJECT_ROOT / 'uploads'
 
+
+def is_ai_master_enabled() -> bool:
+    """Return False if the global AI master switch has been turned off in AiSettings."""
+    try:
+        from core.models import AiSettings
+        s = AiSettings.objects.filter(pk=1).values_list('ai_master_enabled', flat=True).first()
+        return s if s is not None else True
+    except Exception:
+        return True
+
 # OpenAI client (lazy initialized)
 _openai_client = None
 

@@ -146,6 +146,9 @@
                     <span class="badge badge-{{ active_case.service }}">Case #{{ active_case.pk }}</span>
                     <span class="chat-ai-toggle ai-state-{% if active_case.ai_enabled %}on{% else %}off{% endif %}" id="chatAiToggle">
                         <span class="ai-status" id="aiStatus">AI: {{ active_case.ai_enabled|yesno:"On,Off" }}</span>
+                        {% if not ai_master_enabled %}
+                        <span class="ai-master-hint">globally disabled</span>
+                        {% endif %}
                         <button type="button" class="btn btn-sm btn-outline" id="aiToggleBtn" data-case-id="{{ active_case.pk }}" data-toggle-url="{% url 'panel:case_toggle_ai' active_case.pk %}" title="Turn AI responses on or off for this chat">Toggle AI</button>
                     </span>
                     {% endif %}
@@ -361,6 +364,7 @@
 .notes-empty { margin-top: 1rem; }
 .chat-ai-toggle { display: inline-flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .chat-ai-toggle .ai-status { font-size: 0.85rem; color: var(--text-secondary); }
+.ai-master-hint { font-size: 0.72rem; color: #f87171; font-style: italic; opacity: 0.9; }
 .chat-panel .chat-wrap { display: flex; flex-direction: column; gap: 1rem; }
 .chat-messages { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
 .chat-msg { display: flex; flex-direction: column; align-items: flex-start; }

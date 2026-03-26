@@ -37,6 +37,7 @@ from .services import (
     transcribe_voice, update_user_profile, should_update_profile,
     get_fallback_response, READY_FOR_CONSULTANT_MARKER,
     suggest_document_name, parse_filename_from_response,
+    is_ai_master_enabled,
 )
 
 # Configure logging
@@ -263,7 +264,10 @@ def process_ai_response(user, case, text: str, lang: str, send_reply: bool = Tru
     # Add user message to conversation
     case.add_message('user', text)
 
-    # If AI is turned off for this case, do not call AI; no reply sent
+    # Global master switch or per-case toggle
+    if not is_ai_master_enabled():
+        return (None, None)
+
     if not getattr(case, 'ai_enabled', True):
         return (None, None)
 

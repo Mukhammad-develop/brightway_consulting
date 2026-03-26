@@ -55,6 +55,7 @@ urlpatterns = [
     path('admin/files/<int:doc_id>/delete', files.file_delete, name='file_delete'),
     
     # Service Management (elevated users only)
+    path('admin/services/ai-master-toggle', services.ai_master_toggle, name='ai_master_toggle'),
     path('admin/services', services.services_list, name='services_list'),
     path('admin/services/add', services.service_add, name='service_add'),
     path('admin/services/<int:service_id>/edit', services.service_edit, name='service_edit'),

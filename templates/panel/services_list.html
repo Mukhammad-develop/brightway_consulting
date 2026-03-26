@@ -7,6 +7,34 @@
 {% endblock %}
 
 {% block content %}
+
+<!-- Global AI Master Switch -->
+<div class="panel-card ai-master-card {% if not ai_master_enabled %}ai-master-off{% endif %}" style="margin-bottom:1.5rem;">
+    <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div>
+            <div style="display:flex;align-items:center;gap:0.6rem;">
+                <span style="font-size:1.3rem;">🤖</span>
+                <strong style="font-size:1rem;">Global AI Switch</strong>
+                {% if ai_master_enabled %}
+                <span class="ai-master-badge on">ON — AI is active for all chats</span>
+                {% else %}
+                <span class="ai-master-badge off">OFF — AI is disabled for ALL chats</span>
+                {% endif %}
+            </div>
+            <p style="margin:.4rem 0 0;font-size:.82rem;color:var(--text-muted);">
+                Turning this OFF immediately stops the bot from calling AI for <em>every</em> user — regardless of individual chat settings.
+                Use as an emergency kill-switch.
+            </p>
+        </div>
+        <form method="post" action="{% url 'panel:ai_master_toggle' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn {% if ai_master_enabled %}btn-danger{% else %}btn-primary{% endif %}" style="min-width:120px;">
+                {% if ai_master_enabled %}Disable AI{% else %}Enable AI{% endif %}
+            </button>
+        </form>
+    </div>
+</div>
+
 <div class="services-container">
     {% if services %}
     <div class="services-grid">
@@ -180,6 +208,11 @@ input:checked + .toggle-slider { background: var(--primary-color, var(--accent-p
 input:checked + .toggle-slider:before { transform: translateX(20px); background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 input:focus-visible + .toggle-slider { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
 .prompt-textarea { font-family: 'Monaco', 'Menlo', monospace; font-size: 0.85rem; background: var(--bg-tertiary); }
+.ai-master-card { border: 2px solid var(--border-color); transition: border-color .2s; }
+.ai-master-card.ai-master-off { border-color: #f87171; background: rgba(248,113,113,.05); }
+.ai-master-badge { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+.ai-master-badge.on { background: rgba(34,197,94,.15); color: #22c55e; }
+.ai-master-badge.off { background: rgba(248,113,113,.18); color: #f87171; }
 </style>
 
 <script>
