@@ -48,6 +48,14 @@ def services_list(request):
             except OperationalError:
                 messages.error(request, 'Database is missing AI settings table. Run migrations and reload the site.')
             return redirect('panel:services_list')
+        if action == 'reseed_ai_defaults':
+            from django.core.management import call_command
+            try:
+                call_command('seed_ai_defaults')
+                messages.success(request, 'AI prompt defaults re-seeded (empty fields filled in).')
+            except Exception as e:
+                messages.error(request, f'Failed to re-seed defaults: {e}')
+            return redirect('panel:services_list')
         if action == 'load_defaults':
             from django.core.management import call_command
             try:
@@ -389,33 +397,31 @@ def step_edit(request, service_id, step_id):
 def test_prompt(request, service_id):
     """Test AI system prompt with a sample message."""
     service = get_object_or_404(ServiceDefinition, pk=service_id)
-    
+
+    # GET request — return the current compiled system prompt so admin can preview it
+    if request.method == 'GET':
+        from bot.services import build_system_prompt
+        lang = request.GET.get('lang', 'en')
+        prompt = build_system_prompt(service.slug, lang)
+        return JsonResponse({'ok': True, 'prompt': prompt, 'lang': lang,
+                             'prompt_length': len(prompt),
+                             'has_content': bool(prompt.strip())})
+
     try:
         data = json.loads(request.body)
         message = data.get('message', '')
-        
+
         if not message:
             return JsonResponse({'ok': False, 'error': 'No message provided'})
-        
-        # Build test prompt from service definition
-        from bot.services import test_ai_prompt, build_system_prompt, TONE_RULES
-        
-        # Use the full system prompt as configured
-        if service.ai_system_prompt:
-            system_prompt = service.ai_system_prompt
-        else:
-            system_prompt = f"You are an AI assistant for {service.name} service."
-        
-        # Add tone rules if not already included
-        if TONE_RULES not in system_prompt:
-            system_prompt += f"\n\n{TONE_RULES}"
-        
-        # Test the prompt using our AI service
+
+        from bot.services import test_ai_prompt, build_system_prompt
+        system_prompt = build_system_prompt(service.slug, 'en')
         ai_response = test_ai_prompt(system_prompt, message)
-        
+
         return JsonResponse({
-            'ok': True, 
-            'response': ai_response
+            'ok': True,
+            'response': ai_response,
+            'prompt_preview': system_prompt[:300] + '...' if len(system_prompt) > 300 else system_prompt,
         })
     
     except json.JSONDecodeError:

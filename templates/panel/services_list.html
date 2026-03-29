@@ -89,6 +89,7 @@
             <div class="service-card-footer">
                 <a href="{% url 'panel:service_edit' service_id=item.service.pk %}" class="btn btn-outline btn-sm">Edit</a>
                 <a href="{% url 'panel:service_steps' service_id=item.service.pk %}" class="btn btn-outline btn-sm">Manage Steps</a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="previewPrompt({{ item.service.pk }}, '{{ item.service.slug }}')">View Prompt</button>
                 {% if item.case_count == 0 %}
                 <form method="post" action="{% url 'panel:service_delete' service_id=item.service.pk %}" style="display:inline;">
                     {% csrf_token %}
@@ -114,7 +115,17 @@
     {% endif %}
 
     <div class="panel-card" style="margin-top: 1.5rem;">
-        <div class="card-header">AI Settings</div>
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+            <span>AI Settings</span>
+            <form method="post" action="{% url 'panel:services_list' %}" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="reseed_ai_defaults">
+                <button type="submit" class="btn btn-outline btn-sm"
+                        onclick="return confirm('This will fill any EMPTY prompt fields with built-in defaults. Non-empty fields are kept as-is. Continue?')">
+                    Re-seed Defaults
+                </button>
+            </form>
+        </div>
         <div class="card-body">
             <form method="post" action="{% url 'panel:services_list' %}">
                 {% csrf_token %}
@@ -215,7 +226,75 @@ input:focus-visible + .toggle-slider { outline: 2px solid var(--accent-primary);
 .ai-master-badge.off { background: rgba(248,113,113,.18); color: #f87171; }
 </style>
 
+<!-- Prompt Preview Modal -->
+<div id="promptModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--bg-primary,#fff);border-radius:12px;max-width:760px;width:92%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border-color,#e5e7eb);">
+            <div>
+                <strong id="promptModalTitle">Prompt Preview</strong>
+                <span id="promptModalMeta" style="margin-left:0.75rem;font-size:0.78rem;color:var(--text-secondary,#6b7280);"></span>
+            </div>
+            <button onclick="document.getElementById('promptModal').style.display='none'" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-secondary,#6b7280);">&times;</button>
+        </div>
+        <div style="padding:1rem 1.25rem;overflow-y:auto;flex:1;">
+            <div id="promptModalStatus" style="margin-bottom:0.75rem;"></div>
+            <pre id="promptModalContent" style="white-space:pre-wrap;word-break:break-word;font-size:0.8rem;background:var(--bg-secondary,#f9fafb);border:1px solid var(--border-color,#e5e7eb);border-radius:8px;padding:1rem;max-height:55vh;overflow-y:auto;margin:0;color:var(--text-primary,#111);"></pre>
+        </div>
+        <div style="padding:0.75rem 1.25rem;border-top:1px solid var(--border-color,#e5e7eb);display:flex;gap:0.5rem;">
+            <button onclick="previewPromptLang('ru')" class="btn btn-outline btn-sm">View in Russian</button>
+            <button onclick="previewPromptLang('uz')" class="btn btn-outline btn-sm">View in Uzbek</button>
+            <button onclick="previewPromptLang('en')" class="btn btn-outline btn-sm">View in English</button>
+        </div>
+    </div>
+</div>
+
 <script>
+let _currentPreviewServiceId = null;
+let _currentPreviewSlug = '';
+
+function previewPrompt(serviceId, slug) {
+    _currentPreviewServiceId = serviceId;
+    _currentPreviewSlug = slug;
+    _fetchPromptPreview('en');
+}
+
+function previewPromptLang(lang) {
+    if (_currentPreviewServiceId) _fetchPromptPreview(lang);
+}
+
+function _fetchPromptPreview(lang) {
+    const modal = document.getElementById('promptModal');
+    const content = document.getElementById('promptModalContent');
+    const status = document.getElementById('promptModalStatus');
+    const title = document.getElementById('promptModalTitle');
+    const meta = document.getElementById('promptModalMeta');
+
+    modal.style.display = 'flex';
+    content.textContent = 'Loading…';
+    status.innerHTML = '';
+    title.textContent = 'Prompt Preview — ' + _currentPreviewSlug;
+    meta.textContent = '(lang: ' + lang + ')';
+
+    fetch(`/admin/services/${_currentPreviewServiceId}/test-prompt?lang=${lang}`, {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            meta.textContent = `(lang: ${data.lang}, ${data.prompt_length} chars)`;
+            if (!data.has_content) {
+                status.innerHTML = '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:0.5rem 0.75rem;color:#92400e;font-size:0.82rem;">⚠️ Prompt is empty — AI will use fallback behaviour. Fill in the AI System Prompt for this service or the Global Prompts below.</div>';
+            } else {
+                status.innerHTML = '<div style="background:#d1fae5;border:1px solid #10b981;border-radius:6px;padding:0.5rem 0.75rem;color:#065f46;font-size:0.82rem;">✓ Prompt is populated and will be sent to ChatGPT.</div>';
+            }
+            content.textContent = data.prompt || '(empty)';
+        } else {
+            content.textContent = 'Error: ' + (data.error || 'Unknown error');
+        }
+    })
+    .catch(e => { content.textContent = 'Fetch error: ' + e; });
+}
+
 function toggleService(serviceId, isActive) {
     fetch(`/admin/services/${serviceId}/toggle`, {
         method: 'POST',

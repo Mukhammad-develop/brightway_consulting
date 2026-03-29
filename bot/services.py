@@ -233,8 +233,14 @@ Respond with ONLY the service slug (student, paye, schengen, self, company, or g
         # Normalize: take first word in case model added extra text
         result = (result.split()[0] if result else '').rstrip('.,;:')
 
-        # Validate response
-        valid_services = ['student', 'paye', 'schengen', 'self', 'company', 'general']
+        # Validate response against DB slugs (+ 'general' sentinel)
+        try:
+            from core.models import ServiceDefinition as _SD
+            valid_services = set(_SD.objects.filter(is_active=True).values_list('slug', flat=True))
+        except Exception:
+            valid_services = {'student', 'paye', 'schengen', 'self', 'company'}
+        valid_services.add('general')
+
         out = result if result in valid_services and result != 'general' else None
         print(f"[SVC] ai_detect_service: text={text[:60]!r} -> raw={result!r} -> return={out!r}")
         logger.info(f"AI detected service: {result} for text: {text[:50]}... -> return {out}")
@@ -357,13 +363,32 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
     natural = ((getattr(ai_settings, 'natural_language_rules', '') or '').strip() if ai_settings else '').strip()
     common = ((getattr(ai_settings, 'common_rules', '') or '').strip() if ai_settings else '').strip()
 
+    # Safety fallback: if everything in DB is empty, use a minimal hardcoded prompt
+    # so the AI at least knows who it is.
+    if not base_prompt.strip() and not any([tone, anti, examples, natural, common]):
+        logger.warning(f"[PROMPT] build_system_prompt: ALL DB prompts empty for service={service!r}. Using fallback.")
+        base_prompt = (
+            "You are a helpful AI assistant for Brightway Consulting, a UK-based consultancy "
+            "that helps clients with student visas, PAYE tax refunds, Self Assessment tax returns, "
+            "Schengen visas, and company accounting.\n\n"
+            "Collect the information needed for the user's service step by step, then say "
+            "[READY_FOR_CONSULTANT] when everything is gathered. Be friendly and concise."
+        )
+
     parts = [base_prompt]
     for block in (tone, anti, examples, natural, common):
         if block:
             parts.append(block)
     parts.append(f"This turn, you MUST reply ONLY in {target_lang}.")
     full_prompt = "\n\n".join([p for p in parts if (p or '').strip()])
-    
+
+    logger.info(
+        f"[PROMPT] build_system_prompt: service={service!r} lang={lang!r} "
+        f"svc_prompt={'yes' if svc_def and svc_def.ai_system_prompt else 'no'} "
+        f"general_prompt={'yes' if ai_settings and ai_settings.general_system_prompt else 'no'} "
+        f"total_chars={len(full_prompt)}"
+    )
+
     return full_prompt
 
 
