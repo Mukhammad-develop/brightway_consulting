@@ -37,7 +37,7 @@ from .services import (
     transcribe_voice, update_user_profile, should_update_profile,
     get_fallback_response, READY_FOR_CONSULTANT_MARKER,
     suggest_document_name, parse_filename_from_response,
-    is_ai_master_enabled,
+    is_ai_master_enabled, wants_consultant_now,
 )
 
 # Configure logging
@@ -253,6 +253,20 @@ def try_assign_case_to_consultant(case, user):
         logger.info(f"Case #{case.pk} assigned to consultant {consultant.username}")
 
 
+def _immediate_redirect_to_consultant(user, case, lang: str) -> str:
+    """
+    Immediately assign the case to a consultant and disable AI.
+    Returns the message to send to the user.
+    """
+    try:
+        try_assign_case_to_consultant(case, user)
+    except Exception as e:
+        logger.error(f"Immediate consultant assignment failed: {e}")
+    case.ai_enabled = False
+    case.save(update_fields=['ai_enabled'])
+    return t(lang, 'redirect_to_consultant')
+
+
 def process_ai_response(user, case, text: str, lang: str, send_reply: bool = True):
     """
     Process user message and get AI response with error handling.
@@ -291,9 +305,10 @@ def process_ai_response(user, case, text: str, lang: str, send_reply: bool = Tru
         case.add_message('assistant', to_send)
 
         if READY_FOR_CONSULTANT_MARKER in ai_response:
-            # Only turn off AI when conversation is long enough (avoid turning off on first reply by mistake)
+            # Assign and disable AI. Minimum 2 messages (user + AI) to avoid accidental trigger;
+            # the skip-to-consultant path uses a lower bar intentionally.
             conv_after = case.get_conversation()
-            if len(conv_after) >= 4:
+            if len(conv_after) >= 2:
                 try:
                     try_assign_case_to_consultant(case, user)
                 except Exception as e:
@@ -568,9 +583,18 @@ def handle_text_message(message):
             except Exception as e:
                 logger.error(f"Early service assignment failed: {e}")
 
+        # Immediate bypass: user asked to talk to a real consultant directly
+        if wants_consultant_now(text) and getattr(case, 'ai_enabled', True):
+            case.add_message('user', text)
+            redirect_msg = _immediate_redirect_to_consultant(user, case, lang)
+            case.add_message('assistant', redirect_msg)
+            bot.send_message(message.chat.id, redirect_msg)
+            logger.info(f"Immediate consultant redirect for {user.telegram_id}")
+            return
+
         print(f"[BOT] handle_text: before process_ai_response case.service={case.service!r}")
         logger.info(f"[BOT] handle_text: before process_ai_response case.service={case.service!r}")
-        
+
         # AI handles conversation from the start (no auto hello message)
         stop_typing = threading.Event()
         typing_thread = threading.Thread(

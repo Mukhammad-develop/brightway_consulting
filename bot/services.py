@@ -65,6 +65,33 @@ _rate_limit = {
 # Marker in AI response when info collection is complete and user should be assigned to a consultant
 READY_FOR_CONSULTANT_MARKER = '[READY_FOR_CONSULTANT]'
 
+# ============== Consultant Bypass Detection ==============
+
+_WANTS_CONSULTANT_PHRASES = [
+    # English
+    'talk to a consultant', 'speak to a consultant', 'chat with a consultant',
+    'connect me to a consultant', 'transfer me to a consultant',
+    'speak to a human', 'talk to a human', 'talk to a person', 'speak to a person',
+    'talk to a real person', 'speak to a real person', 'connect me to a human',
+    'want a consultant', 'need a consultant', 'i want consultant', 'i need consultant',
+    'want to speak to someone', 'want to talk to someone',
+    'no ai', 'no bot', 'skip ai', 'bypass ai',
+    'human agent', 'real agent', 'real consultant', 'real person',
+    # Russian
+    'живой человек', 'настоящий человек',
+    'переключите на', 'соедините с', 'хочу с человеком', 'хочу человека',
+    'живой оператор', 'живой специалист', 'хочу консультанта', 'нужен консультант',
+    # Uzbek
+    'maslahatchi bilan', 'inson bilan', 'konsultant bilan',
+    'maslahatchi kerak', 'tirik odam', 'haqiqiy odam',
+]
+
+
+def wants_consultant_now(text: str) -> bool:
+    """Return True if the user's message clearly asks to skip AI and talk to a consultant."""
+    lowered = (text or '').lower().strip()
+    return any(phrase in lowered for phrase in _WANTS_CONSULTANT_PHRASES)
+
 
 # ============== OpenAI Client Management ==============
 
@@ -368,11 +395,16 @@ def build_system_prompt(service: str, lang: str = 'en') -> str:
     if not base_prompt.strip() and not any([tone, anti, examples, natural, common]):
         logger.warning(f"[PROMPT] build_system_prompt: ALL DB prompts empty for service={service!r}. Using fallback.")
         base_prompt = (
-            "You are a helpful AI assistant for Brightway Consulting, a UK-based consultancy "
-            "that helps clients with student visas, PAYE tax refunds, Self Assessment tax returns, "
-            "Schengen visas, and company accounting.\n\n"
-            "Collect the information needed for the user's service step by step, then say "
-            "[READY_FOR_CONSULTANT] when everything is gathered. Be friendly and concise."
+            "You are an AI assistant for Brightway Consulting, a UK-based consultancy "
+            "that helps clients with student visas, PAYE tax refunds, Self Assessment tax "
+            "returns, Schengen visas, and company accounting.\n\n"
+            "On your very first message, introduce yourself as an AI assistant. Clearly "
+            "explain that your role is to collect the required information for the user's "
+            "service, and then pass them to a human consultant who will handle their case.\n\n"
+            "Collect the needed information step by step (one question at a time). When "
+            "everything is collected, output [READY_FOR_CONSULTANT] on its own line.\n\n"
+            "If the user asks to speak to a real person or consultant directly, respond "
+            "politely that you will connect them immediately, then output [READY_FOR_CONSULTANT]."
         )
 
     parts = [base_prompt]

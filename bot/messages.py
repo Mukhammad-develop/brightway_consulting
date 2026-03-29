@@ -71,6 +71,8 @@ Created: {created}""",
 
         'consultant_will_reply': "A consultant will reply to you shortly. Thank you for your message.",
 
+        'redirect_to_consultant': "Of course! I'm connecting you to one of our consultants right now. They'll be in touch with you shortly. 👤",
+
         'error_general': "Something went wrong. Please try again later.",
 
         'services': {
@@ -148,6 +150,8 @@ Created: {created}""",
 
         'consultant_will_reply': "Консультант ответит вам в ближайшее время. Спасибо за ваше сообщение.",
 
+        'redirect_to_consultant': "Конечно! Сейчас переключаю вас на нашего консультанта. Они свяжутся с вами в ближайшее время. 👤",
+
         'error_general': "Что-то пошло не так. Попробуйте позже.",
 
         'services': {
@@ -224,6 +228,8 @@ Yaratilgan: {created}""",
         'voice_ask_type': "Kechirasiz, ovozli xabarni tushuna olmadim. Iltimos, matn yozib yuboring.",
 
         'consultant_will_reply': "Konsultant tez orada sizga javob beradi. Xabaringiz uchun rahmat.",
+
+        'redirect_to_consultant': "Albatta! Hoziroq sizni konsultantimizga ulamoqdaman. Ular tez orada siz bilan bog'lanishadi. 👤",
 
         'error_general': "Nimadir noto'g'ri ketdi. Keyinroq urinib ko'ring.",
 

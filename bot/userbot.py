@@ -38,7 +38,7 @@ from .messages import t, get_all_languages, LANG_CALLBACKS
 from .services import (
     ai_detect_service, ask_ai, update_user_profile, should_update_profile,
     suggest_document_name, parse_filename_from_response,
-    transcribe_voice, is_ai_master_enabled,
+    transcribe_voice, is_ai_master_enabled, wants_consultant_now,
     group_is_relevant, group_dm_invite_message, group_answer_question,
     READY_FOR_CONSULTANT_MARKER,
 )
@@ -467,6 +467,25 @@ def register_handlers(client: TelegramClient, account_index: int):
             if not is_ai_master_enabled() or not getattr(case, 'ai_enabled', True):
                 return
 
+            # Immediate bypass: user asked to talk to a real consultant directly
+            if wants_consultant_now(text):
+                def _do_redirect():
+                    from core.models import Case
+                    from bot.bot import try_assign_case_to_consultant
+                    c = Case.objects.get(pk=case.pk)
+                    try:
+                        try_assign_case_to_consultant(c, user)
+                    except Exception as exc:
+                        logger.error(f"Immediate consultant assignment failed: {exc}")
+                    c.ai_enabled = False
+                    c.save(update_fields=['ai_enabled'])
+                await run_sync(_do_redirect)
+                redirect_msg = t(lang, 'redirect_to_consultant')
+                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', redirect_msg))
+                await event.respond(redirect_msg)
+                logger.info(f"[Account {account_index}] Immediate consultant redirect for {sender.id}")
+                return
+
             # Show typing while AI is generating (Telegram typing lasts ~5s, repeat every 4s)
             async def typing_loop():
                 while True:
@@ -499,8 +518,8 @@ def register_handlers(client: TelegramClient, account_index: int):
                         from bot.bot import try_assign_case_to_consultant
                         c = Case.objects.get(pk=case.pk)
                         conv = c.get_conversation()
-                        # Only turn off AI when conversation is long enough (avoid first-reply mistake)
-                        if len(conv) >= 4:
+                        # Minimum 2 messages (user + AI) to avoid accidental trigger
+                        if len(conv) >= 2:
                             try_assign_case_to_consultant(c, user)
                             c.ai_enabled = False
                             c.save(update_fields=['ai_enabled'])
