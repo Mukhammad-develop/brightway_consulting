@@ -67,30 +67,46 @@ READY_FOR_CONSULTANT_MARKER = '[READY_FOR_CONSULTANT]'
 
 # ============== Consultant Bypass Detection ==============
 
-_WANTS_CONSULTANT_PHRASES = [
-    # English
-    'talk to a consultant', 'speak to a consultant', 'chat with a consultant',
-    'connect me to a consultant', 'transfer me to a consultant',
-    'speak to a human', 'talk to a human', 'talk to a person', 'speak to a person',
-    'talk to a real person', 'speak to a real person', 'connect me to a human',
-    'want a consultant', 'need a consultant', 'i want consultant', 'i need consultant',
-    'want to speak to someone', 'want to talk to someone',
-    'no ai', 'no bot', 'skip ai', 'bypass ai',
-    'human agent', 'real agent', 'real consultant', 'real person',
-    # Russian
-    'живой человек', 'настоящий человек',
-    'переключите на', 'соедините с', 'хочу с человеком', 'хочу человека',
-    'живой оператор', 'живой специалист', 'хочу консультанта', 'нужен консультант',
-    # Uzbek
-    'maslahatchi bilan', 'inson bilan', 'konsultant bilan',
-    'maslahatchi kerak', 'tirik odam', 'haqiqiy odam',
-]
-
-
 def wants_consultant_now(text: str) -> bool:
-    """Return True if the user's message clearly asks to skip AI and talk to a consultant."""
-    lowered = (text or '').lower().strip()
-    return any(phrase in lowered for phrase in _WANTS_CONSULTANT_PHRASES)
+    """
+    Use OpenAI to detect if the user wants to skip the AI and talk directly to a
+    human consultant. Works in any language with any phrasing.
+    Returns False on empty input or API failure (safe default: keep AI running).
+    """
+    if not (text or '').strip():
+        return False
+
+    client = get_openai_client()
+    if not client:
+        return False
+
+    system = (
+        "You are a binary intent classifier. "
+        "A user is chatting with an AI assistant for a consulting company. "
+        "Your only job: decide if this message means the user wants to skip the AI "
+        "and speak directly with a real human consultant right now. "
+        "This includes any phrasing in any language — English, Russian, Uzbek, or other — "
+        "such as wanting a real person, a live agent, no AI, connect me to someone, etc. "
+        "Reply with exactly one word: YES or NO."
+    )
+    try:
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': system},
+                {'role': 'user', 'content': text},
+            ],
+            max_tokens=3,
+            temperature=0.0,
+            timeout=8,
+        )
+        result = response.choices[0].message.content.strip().upper()
+        detected = result.startswith('YES')
+        logger.info(f"[BYPASS] wants_consultant_now: text={text[:60]!r} -> {result!r} -> {detected}")
+        return detected
+    except Exception as e:
+        logger.warning(f"[BYPASS] wants_consultant_now failed: {e} — defaulting to False")
+        return False
 
 
 # ============== OpenAI Client Management ==============
