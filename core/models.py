@@ -74,6 +74,22 @@ class Case(models.Model):
     
     user = models.ForeignKey(TgUser, on_delete=models.CASCADE, related_name='cases')
     service = models.CharField(max_length=50, choices=SERVICE_CHOICES, default='general')
+    subject = models.ForeignKey(
+        'Subject',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='cases',
+        help_text='Subject selected in simplified bot flow',
+    )
+    service_definition = models.ForeignKey(
+        'ServiceDefinition',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='cases',
+        help_text='Linked ServiceDefinition (set by simplified bot flow)',
+    )
     assigned_to = models.ForeignKey('AdminUser', null=True, blank=True, on_delete=models.SET_NULL, related_name='assigned_cases')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
@@ -231,13 +247,53 @@ class AdminUser(models.Model):
         return f"{self.display_name or self.username} ({self.role})"
 
 
-class ServiceDefinition(models.Model):
-    """Dynamic service definition - allows admins to configure services."""
-    
+class Subject(models.Model):
+    """Service subject/category (e.g. Tax, Visa, Company Management).
+
+    Used by the simplified bot flow to group services under broader topics
+    that the user picks first before seeing individual services.
+    """
+
     slug = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     name_ru = models.CharField(max_length=100, null=True, blank=True)
     name_uz = models.CharField(max_length=100, null=True, blank=True)
+    icon_emoji = models.CharField(max_length=10, blank=True, default='📂')
+    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'subjects'
+        ordering = ['display_order', 'name']
+
+    def __str__(self):
+        return f"{self.icon_emoji} {self.name}"
+
+    def get_name(self, lang: str = 'en') -> str:
+        """Return localised name, falling back to the default name."""
+        if lang == 'ru' and self.name_ru:
+            return self.name_ru
+        if lang == 'uz' and self.name_uz:
+            return self.name_uz
+        return self.name
+
+
+class ServiceDefinition(models.Model):
+    """Dynamic service definition - allows admins to configure services."""
+
+    slug = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
+    name_ru = models.CharField(max_length=100, null=True, blank=True)
+    name_uz = models.CharField(max_length=100, null=True, blank=True)
+    subject = models.ForeignKey(
+        'Subject',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='services',
+        help_text='Subject category this service belongs to (used by simplified bot flow)',
+    )
     description = models.TextField(blank=True, default='')
     description_ru = models.TextField(blank=True, default='')
     description_uz = models.TextField(blank=True, default='')

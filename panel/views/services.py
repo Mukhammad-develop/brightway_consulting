@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST, require_http_methods
 from django.db.utils import OperationalError
 
-from core.models import ServiceDefinition, ServiceStep, Case, AiSettings
+from core.models import ServiceDefinition, ServiceStep, Case, AiSettings, Subject
 from ..decorators import login_required, elevated_required, master_required
 from .helpers import session_ctx
 
@@ -147,6 +147,15 @@ def service_add(request):
             messages.error(request, f'A service with slug "{slug}" already exists.')
             return redirect('panel:service_add')
         
+        # Optional subject assignment
+        subject_id = request.POST.get('subject_id') or None
+        subject_obj = None
+        if subject_id:
+            try:
+                subject_obj = Subject.objects.get(pk=int(subject_id))
+            except (Subject.DoesNotExist, ValueError):
+                pass
+
         # Create service
         service = ServiceDefinition.objects.create(
             name=name,
@@ -162,6 +171,7 @@ def service_add(request):
             icon_emoji=icon_emoji,
             badge_color=badge_color,
             display_order=display_order,
+            subject=subject_obj,
         )
         
         # Create default steps
@@ -185,6 +195,7 @@ def service_add(request):
     context = {
         'page_title': 'Add Service',
         'form_action': 'add',
+        'subjects': Subject.objects.filter(is_active=True).order_by('display_order', 'name'),
         **session_ctx(request),
     }
     return render(request, 'panel/service_form.html', context)
@@ -215,7 +226,17 @@ def service_edit(request, service_id):
         service.ai_collect_items = request.POST.get('ai_collect_items', '').strip()
         service.ai_documents_list = request.POST.get('ai_documents_list', '').strip()
         service.ai_strict_flow = request.POST.get('ai_strict_flow') == 'on'
-        
+
+        # Subject assignment
+        subject_id = request.POST.get('subject_id') or None
+        if subject_id:
+            try:
+                service.subject = Subject.objects.get(pk=int(subject_id))
+            except (Subject.DoesNotExist, ValueError):
+                service.subject = None
+        else:
+            service.subject = None
+
         service.save()
         
         messages.success(request, f'Service "{service.name}" updated successfully.')
@@ -241,6 +262,7 @@ def service_edit(request, service_id):
         'page_title': f'Edit Service: {service.name}',
         'form_action': 'edit',
         'service': service,
+        'subjects': Subject.objects.filter(is_active=True).order_by('display_order', 'name'),
         **session_ctx(request),
     }
     return render(request, 'panel/service_form.html', context)
@@ -435,3 +457,123 @@ def test_prompt(request, service_id):
 
 # Import models at top level to avoid circular imports
 from django.db import models
+
+
+# ── Subject CRUD (simplified bot flow) ────────────────────────────────────────
+
+@login_required
+@elevated_required
+def subjects_list(request):
+    """List all subjects (used by simplified bot flow)."""
+    subjects = Subject.objects.prefetch_related('services').all()
+    context = {
+        'page_title': 'Subjects',
+        'subjects': subjects,
+        **session_ctx(request),
+    }
+    return render(request, 'panel/subjects_list.html', context)
+
+
+@login_required
+@elevated_required
+def subject_add(request):
+    """Add a new subject."""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        slug = request.POST.get('slug', '').strip().lower().replace(' ', '_')
+        name_ru = request.POST.get('name_ru', '').strip()
+        name_uz = request.POST.get('name_uz', '').strip()
+        icon_emoji = request.POST.get('icon_emoji', '📂').strip() or '📂'
+        is_active = request.POST.get('is_active') == 'on'
+        display_order = int(request.POST.get('display_order', 0) or 0)
+
+        if not name:
+            messages.error(request, 'Subject name is required.')
+            return redirect('panel:subject_add')
+
+        if not slug:
+            slug = name.lower().replace(' ', '_')[:50]
+
+        if Subject.objects.filter(slug=slug).exists():
+            messages.error(request, f'A subject with slug "{slug}" already exists.')
+            return redirect('panel:subject_add')
+
+        Subject.objects.create(
+            name=name,
+            slug=slug,
+            name_ru=name_ru,
+            name_uz=name_uz,
+            icon_emoji=icon_emoji,
+            is_active=is_active,
+            display_order=display_order,
+        )
+        messages.success(request, f'Subject "{name}" created.')
+        return redirect('panel:subjects_list')
+
+    context = {
+        'page_title': 'Add Subject',
+        'form_action': 'add',
+        **session_ctx(request),
+    }
+    return render(request, 'panel/subject_form.html', context)
+
+
+@login_required
+@elevated_required
+def subject_edit(request, subject_id):
+    """Edit a subject."""
+    subject = get_object_or_404(Subject, pk=subject_id)
+
+    if request.method == 'POST':
+        subject.name = request.POST.get('name', '').strip() or subject.name
+        subject.name_ru = request.POST.get('name_ru', '').strip()
+        subject.name_uz = request.POST.get('name_uz', '').strip()
+        subject.icon_emoji = request.POST.get('icon_emoji', '📂').strip() or '📂'
+        subject.is_active = request.POST.get('is_active') == 'on'
+        subject.display_order = int(request.POST.get('display_order', 0) or 0)
+        subject.save()
+        messages.success(request, f'Subject "{subject.name}" updated.')
+        return redirect('panel:subjects_list')
+
+    context = {
+        'page_title': f'Edit Subject: {subject.name}',
+        'form_action': 'edit',
+        'subject': subject,
+        **session_ctx(request),
+    }
+    return render(request, 'panel/subject_form.html', context)
+
+
+@login_required
+@elevated_required
+@require_POST
+def subject_delete(request, subject_id):
+    """Delete a subject (only if no services are assigned to it)."""
+    subject = get_object_or_404(Subject, pk=subject_id)
+    svc_count = subject.services.count()
+    if svc_count > 0:
+        messages.error(
+            request,
+            f'Cannot delete "{subject.name}" — {svc_count} service(s) are assigned to it. '
+            'Reassign or remove the services first.',
+        )
+        return redirect('panel:subjects_list')
+    name = subject.name
+    subject.delete()
+    messages.success(request, f'Subject "{name}" deleted.')
+    return redirect('panel:subjects_list')
+
+
+@login_required
+@elevated_required
+@require_POST
+def subject_toggle(request, subject_id):
+    """Toggle subject active status."""
+    subject = get_object_or_404(Subject, pk=subject_id)
+    subject.is_active = not subject.is_active
+    subject.save(update_fields=['is_active'])
+    status = 'activated' if subject.is_active else 'deactivated'
+    messages.success(request, f'Subject "{subject.name}" {status}.')
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True, 'is_active': subject.is_active})
+    return redirect('panel:subjects_list')

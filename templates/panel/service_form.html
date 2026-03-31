@@ -53,6 +53,22 @@
                     <textarea name="description_uz" class="form-textarea" rows="2">{{ service.description_uz|default:'' }}</textarea>
                 </div>
                 
+                {% if subjects %}
+                <div class="form-group">
+                    <label>Subject Category <small style="opacity:0.7">(simplified bot flow)</small></label>
+                    <select name="subject_id" class="form-select">
+                        <option value="">— None —</option>
+                        {% for subj in subjects %}
+                        <option value="{{ subj.pk }}"
+                            {% if service.subject_id and service.subject_id == subj.pk %}selected{% endif %}>
+                            {{ subj.icon_emoji }} {{ subj.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small>Group this service under a subject category shown to users in the simplified bot.</small>
+                </div>
+                {% endif %}
+
                 <div class="form-row">
                     <div class="form-group form-group-icon-emoji">
                         <label>Icon Emoji</label>

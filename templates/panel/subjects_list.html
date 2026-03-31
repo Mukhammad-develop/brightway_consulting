@@ -1,0 +1,107 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}Subjects{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:subject_add' %}" class="btn btn-primary">+ Add Subject</a>
+<a href="{% url 'panel:services_list' %}" class="btn btn-outline">← Services</a>
+{% endblock %}
+
+{% block content %}
+<div class="panel-card">
+    <div class="card-header" style="display: flex; align-items: center; justify-content: space-between;">
+        <span>Subject Categories <small style="font-weight: normal; opacity: 0.7;">(used by simplified bot flow)</small></span>
+        <span class="badge badge-general">{{ subjects|length }} total</span>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if subjects %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Slug</th>
+                    <th>Russian</th>
+                    <th>Uzbek</th>
+                    <th>Services</th>
+                    <th>Order</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for subject in subjects %}
+                <tr>
+                    <td>
+                        <span style="font-size: 1.15rem;">{{ subject.icon_emoji }}</span>
+                        <strong>{{ subject.name }}</strong>
+                    </td>
+                    <td><code>{{ subject.slug }}</code></td>
+                    <td>{{ subject.name_ru|default:'—' }}</td>
+                    <td>{{ subject.name_uz|default:'—' }}</td>
+                    <td>
+                        {% with svc_count=subject.services.count %}
+                        {% if svc_count %}
+                            <span class="badge badge-student">{{ svc_count }} service{{ svc_count|pluralize }}</span>
+                        {% else %}
+                            <span style="opacity: 0.4;">none</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td>{{ subject.display_order }}</td>
+                    <td>
+                        {% if subject.is_active %}
+                            <span class="badge badge-paye">active</span>
+                        {% else %}
+                            <span class="badge badge-general">inactive</span>
+                        {% endif %}
+                    </td>
+                    <td style="white-space: nowrap;">
+                        <a href="{% url 'panel:subject_edit' subject.pk %}" class="btn btn-outline" style="padding: 3px 10px; font-size: 0.78rem;">Edit</a>
+
+                        <form method="post" action="{% url 'panel:subject_toggle' subject.pk %}"
+                              style="display: inline-block; margin-left: 4px;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline"
+                                    style="padding: 3px 10px; font-size: 0.78rem;">
+                                {% if subject.is_active %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
+
+                        <form method="post" action="{% url 'panel:subject_delete' subject.pk %}"
+                              style="display: inline-block; margin-left: 4px;"
+                              onsubmit="return confirm('Delete subject \'{{ subject.name }}\'? This cannot be undone.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger"
+                                    style="padding: 3px 10px; font-size: 0.78rem;">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding: 2rem; text-align: center; opacity: 0.6;">
+            <p>No subjects yet. <a href="{% url 'panel:subject_add' %}">Add the first subject</a> to power the simplified bot flow.</p>
+            <p style="font-size: 0.85rem; margin-top: 0.5rem;">Subjects group services into broader categories (e.g. Tax, Visa, Company Management) that users choose from first.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel-card" style="margin-top: 1.5rem;">
+    <div class="card-header">How Subjects work in the simplified bot flow</div>
+    <div class="card-body">
+        <ol style="line-height: 2; padding-left: 1.2rem; opacity: 0.85;">
+            <li><strong>Step 1 — Greeting:</strong> Bot greets the user and shows the list of active Subjects as buttons.</li>
+            <li><strong>Step 2 — Subject selection:</strong> User picks a Subject (or types it). Bot shows the services belonging to that Subject.</li>
+            <li><strong>Step 3 — Service selection:</strong> User picks a specific Service. Bot shows the <em>Items to Collect</em> list from the service configuration.</li>
+            <li><strong>Step 4 — Collection:</strong> Bot waits while user sends text, photos, and documents. When user types <strong>Done</strong>, the case is finalized.</li>
+            <li><strong>Step 5 — Finalization:</strong> Bot assigns the case to a consultant, sends a thank-you, and stops AI responses.</li>
+        </ol>
+        <p style="font-size: 0.85rem; opacity: 0.7; margin-top: 1rem;">
+            To configure the <em>Items to Collect</em> for each service, edit the service and fill in the
+            <strong>Items to Collect</strong> field under AI Configuration.
+        </p>
+    </div>
+</div>
+{% endblock %}

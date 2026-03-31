@@ -29,23 +29,33 @@ class Command(BaseCommand):
             action='store_true',
             help='Authenticate userbot account 2'
         )
+        parser.add_argument(
+            '--simple',
+            action='store_true',
+            help='Run the simplified structured bot flow (simpled branch)'
+        )
 
     def handle(self, *args, **options):
         if options['auth']:
             self.stdout.write('Authenticating userbot account 1...')
             from bot.userbot import authenticate
             authenticate(1)
-            
+
         elif options['auth2']:
             self.stdout.write('Authenticating userbot account 2...')
             from bot.userbot import authenticate
             authenticate(2)
-            
+
         elif options['userbot']:
             self.stdout.write(self.style.SUCCESS('Starting userbot...'))
             from bot.userbot import run_userbot
             run_userbot()
-            
+
+        elif options['simple']:
+            self.stdout.write(self.style.SUCCESS('Starting simplified bot (simpled flow)...'))
+            from bot.simple_bot import run_bot
+            run_bot()
+
         else:
             self.stdout.write(self.style.SUCCESS('Starting Telegram bot...'))
             from bot.bot import run_bot

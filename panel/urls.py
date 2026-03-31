@@ -64,6 +64,13 @@ urlpatterns = [
     path('admin/services/<int:service_id>/steps', services.service_steps, name='service_steps'),
     path('admin/services/<int:service_id>/steps/<int:step_id>/edit', services.step_edit, name='step_edit'),
     path('admin/services/<int:service_id>/test-prompt', services.test_prompt, name='test_prompt'),
+
+    # Subject Management — simplified bot flow (elevated users only)
+    path('admin/subjects', services.subjects_list, name='subjects_list'),
+    path('admin/subjects/add', services.subject_add, name='subject_add'),
+    path('admin/subjects/<int:subject_id>/edit', services.subject_edit, name='subject_edit'),
+    path('admin/subjects/<int:subject_id>/delete', services.subject_delete, name='subject_delete'),
+    path('admin/subjects/<int:subject_id>/toggle', services.subject_toggle, name='subject_toggle'),
     
     # Reports (elevated users only)
     path('admin/reports', reports.reports_dashboard, name='reports'),

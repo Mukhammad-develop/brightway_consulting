@@ -1,0 +1,130 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title_header %}{{ page_title }}{% endblock %}
+
+{% block topbar_actions %}
+<a href="{% url 'panel:subjects_list' %}" class="btn btn-outline">← Back to Subjects</a>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+
+        <div class="panel-card">
+            <div class="card-header">Subject Information</div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Subject Name *</label>
+                        <input type="text" name="name" class="form-input" value="{{ subject.name|default:'' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Slug (machine name)</label>
+                        <input type="text" name="slug" class="form-input" value="{{ subject.slug|default:'' }}"
+                               {% if form_action == 'edit' %}readonly{% endif %}
+                               placeholder="auto-generated from name">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Name (Russian)</label>
+                        <input type="text" name="name_ru" class="form-input" value="{{ subject.name_ru|default:'' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Name (Uzbek)</label>
+                        <input type="text" name="name_uz" class="form-input" value="{{ subject.name_uz|default:'' }}">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group form-group-icon-emoji">
+                        <label>Icon Emoji</label>
+                        <input type="text" name="icon_emoji" id="icon_emoji_input" class="form-input"
+                               value="{{ subject.icon_emoji|default:'📂' }}" style="width: 80px;">
+                        <div class="icon-emoji-picker" aria-label="Choose icon">
+                            <button type="button" class="icon-emoji-btn" data-emoji="📂" title="Folder">📂</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="💼" title="Business">💼</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="🏢" title="Company">🏢</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="💰" title="Tax / Money">💰</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="✈️" title="Visa / Travel">✈️</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="🎓" title="Education">🎓</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="📄" title="Document">📄</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="🏛️" title="Government">🏛️</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="🌍" title="International">🌍</button>
+                            <button type="button" class="icon-emoji-btn" data-emoji="📊" title="Reports">📊</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Display Order</label>
+                        <input type="number" name="display_order" class="form-input"
+                               value="{{ subject.display_order|default:0 }}" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_active"
+                               {% if subject.is_active or form_action == 'add' %}checked{% endif %}>
+                        <span>Active</span>
+                    </label>
+                    <small>Inactive subjects are hidden from the simplified bot flow.</small>
+                </div>
+            </div>
+        </div>
+
+        {% if form_action == 'edit' and subject.services.all %}
+        <div class="panel-card">
+            <div class="card-header">Services in this Subject</div>
+            <div class="card-body">
+                <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem;">
+                    {% for svc in subject.services.all %}
+                    <li style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span>{{ svc.icon_emoji }} {{ svc.name }}</span>
+                        {% if not svc.is_active %}<span class="badge badge-general">inactive</span>{% endif %}
+                        <a href="{% url 'panel:service_edit' svc.pk %}" class="btn btn-outline" style="padding: 2px 8px; font-size: 0.75rem; margin-left: auto;">Edit</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {% if form_action == 'add' %}Create Subject{% else %}Save Changes{% endif %}
+            </button>
+            <a href="{% url 'panel:subjects_list' %}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.form-container { max-width: 700px; }
+.form-container .form-input { padding-left: 8px; padding-right: 10px; }
+.form-group-icon-emoji { display: flex; flex-direction: column; gap: 0.5rem; }
+.icon-emoji-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.25rem; }
+.icon-emoji-btn { width: 2.25rem; height: 2.25rem; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.25rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px;
+    cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+.icon-emoji-btn:hover { background: var(--bg-elevated); border-color: var(--accent-primary); }
+.icon-emoji-btn.selected { background: rgba(233, 69, 96, 0.2); border-color: var(--accent-primary); }
+</style>
+
+<script>
+(function() {
+    var input = document.getElementById('icon_emoji_input');
+    if (!input) return;
+    var current = (input.value || '').trim();
+    document.querySelectorAll('.icon-emoji-btn').forEach(function(btn) {
+        if (btn.getAttribute('data-emoji') === current) btn.classList.add('selected');
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.icon-emoji-btn').forEach(function(b) { b.classList.remove('selected'); });
+            btn.classList.add('selected');
+            input.value = btn.getAttribute('data-emoji');
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -42,6 +42,17 @@ from .services import (
     group_is_relevant, group_dm_invite_message, group_answer_question,
     READY_FOR_CONSULTANT_MARKER,
 )
+from .simple_flow import (
+    STEP_INIT, STEP_SUBJECT, STEP_SERVICE, STEP_COLLECTING, STEP_DONE,
+    get_state, set_state, clear_state,
+    get_active_subjects, get_services_for_subject,
+    db_get_or_create_user, db_get_or_open_case, db_link_case_to_service,
+    db_finalise_case,
+    detect_lang, ai_match_subject, ai_match_service,
+    is_done_message,
+    build_greeting, build_service_list, build_collect_prompt,
+    build_not_understood, build_no_services, build_ack, build_already_submitted,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -274,233 +285,281 @@ def get_language_buttons():
     ]
 
 
+# ============== Simplified-flow Userbot Helpers ==============
+
+def _subject_buttons(subjects: list) -> list | None:
+    """Build Telethon inline button rows for the subject list (one per row)."""
+    if not subjects:
+        return None
+    return [[Button.inline(f'{s.icon_emoji} {s.name}',
+                           f'simple_subject_{s.pk}'.encode())]
+            for s in subjects]
+
+
+def _service_buttons(services: list) -> list | None:
+    """Build Telethon inline button rows for the service list (one per row)."""
+    if not services:
+        return None
+    return [[Button.inline(f'{svc.icon_emoji} {svc.name}',
+                           f'simple_service_{svc.pk}'.encode())]
+            for svc in services]
+
+
+async def _typing_loop_ub(client: TelegramClient, chat_id: int):
+    """Continuously send typing action until cancelled."""
+    try:
+        while True:
+            await client(functions.messages.SetTypingRequest(
+                peer=chat_id, action=SendMessageTypingAction()
+            ))
+            await asyncio.sleep(4)
+    except asyncio.CancelledError:
+        pass
+
+
+async def _ub_handle_subject_selected(client: TelegramClient, chat_id: int,
+                                       uid: int, subject_id: int) -> None:
+    """Show services for the chosen subject."""
+    from core.models import Subject
+    lang = get_state(uid).get('lang', 'en')
+    try:
+        subject = await run_sync(lambda: Subject.objects.get(pk=subject_id, is_active=True))
+    except Exception:
+        await client.send_message(chat_id, build_not_understood(lang))
+        return
+    services = await run_sync(lambda: get_services_for_subject(subject_id))
+    if not services:
+        await client.send_message(chat_id, build_no_services(lang))
+        return
+    text = build_service_list(lang, subject, services)
+    buttons = _service_buttons(services)
+    await client.send_message(chat_id, text, buttons=buttons or None)
+    set_state(uid, step=STEP_SERVICE, subject_id=subject_id)
+
+
+async def _ub_handle_service_selected(client: TelegramClient, chat_id: int,
+                                       uid: int, sender, service_id: int) -> None:
+    """Open/link a case and show the required items list."""
+    from core.models import ServiceDefinition
+    state = get_state(uid)
+    lang = state.get('lang', 'en')
+    try:
+        svc_def = await run_sync(lambda: ServiceDefinition.objects.get(pk=service_id, is_active=True))
+    except Exception:
+        await client.send_message(chat_id, build_not_understood(lang))
+        return
+    db_user, _ = await run_sync(lambda: db_get_or_create_user(sender.id, sender.first_name,
+                                                               getattr(sender, 'username', None)))
+    case = await run_sync(lambda: db_get_or_open_case(db_user, svc_def.slug))
+    await run_sync(lambda: db_link_case_to_service(case, svc_def, state.get('subject_id')))
+    items = await run_sync(lambda: svc_def.get_collect_items() or svc_def.get_documents_list() or [])
+    prompt = build_collect_prompt(lang, svc_def, items)
+    await client.send_message(chat_id, prompt)
+    await run_sync(lambda: case.add_message('assistant', prompt))
+    set_state(uid, step=STEP_COLLECTING, service_id=service_id,
+              case_id=case.pk, items_to_collect=items)
+
+
+async def _ub_handle_collecting(client: TelegramClient, chat_id: int,
+                                 uid: int, sender, text: str = None,
+                                 file_label: str = None) -> None:
+    """Accept text/file during collecting step; finalise on 'done'."""
+    state = get_state(uid)
+    lang = state.get('lang', 'en')
+    case_id = state.get('case_id')
+
+    if not case_id:
+        clear_state(uid)
+        subjects = await run_sync(get_active_subjects)
+        await client.send_message(chat_id, build_greeting(lang, subjects),
+                                  buttons=_subject_buttons(subjects) or None)
+        set_state(uid, step=STEP_SUBJECT, lang=lang)
+        return
+
+    from core.models import Case
+    try:
+        case = await run_sync(lambda: Case.objects.get(pk=case_id))
+    except Exception:
+        clear_state(uid)
+        return
+
+    if text and await run_sync(lambda: is_done_message(text, lang)):
+        final_msg = await run_sync(
+            lambda: db_finalise_case(uid, sender.id, sender.first_name,
+                                     getattr(sender, 'username', None), lang)
+        )
+        await client.send_message(chat_id, final_msg)
+        return
+
+    if text:
+        await run_sync(lambda: case.add_message('user', text))
+    elif file_label:
+        await run_sync(lambda: case.add_message('user', f'[{file_label}]'))
+
+    await client.send_message(chat_id, build_ack(lang))
+
+
 # ============== Handler Registration ==============
 
 def register_handlers(client: TelegramClient, account_index: int):
-    """Register event handlers for a client."""
+    """Register event handlers for a client (simplified flow)."""
     _register_group_handlers(client, account_index)
+
+    # ── /start ─────────────────────────────────────────────────────────────────
 
     @client.on(events.NewMessage(pattern='/start', incoming=True))
     async def handle_start(event):
-        """Handle /start command."""
         if not event.is_private:
             return
-        
         try:
             sender = await event.get_sender()
-            
-            # Create/update user in database
-            user, _ = await run_sync(lambda: _get_or_create_user(
-                sender.id, sender.first_name, sender.username
-            ))
-            
-            # Set linked account
+            uid = sender.id
+            await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
-            
-            # Get language
-            lang = user.language_code if user else 'en'
-            
-            # Send welcome with language buttons
-            await event.respond(
-                t(lang, 'welcome'),
-                buttons=get_language_buttons()
-            )
-            
-            logger.info(f"[Account {account_index}] /start from {sender.id}")
-            
+            clear_state(uid)
+            subjects = await run_sync(get_active_subjects)
+            lang_fallback = 'en'
+            lang = lang_fallback
+            text = build_greeting(lang, subjects)
+            buttons = _subject_buttons(subjects)
+            await event.respond(text, buttons=buttons or None)
+            set_state(uid, step=STEP_SUBJECT, lang=lang)
+            logger.info(f"[Account {account_index}] /start (simple) from {sender.id}")
         except Exception as e:
             logger.error(f"Error in /start handler: {e}")
-    
+
+    # ── /help ──────────────────────────────────────────────────────────────────
+
     @client.on(events.NewMessage(pattern='/help', incoming=True))
     async def handle_help(event):
-        """Handle /help command."""
         if not event.is_private:
             return
-        
         try:
             sender = await event.get_sender()
             user, _ = await run_sync(lambda: _get_or_create_user(sender.id))
             lang = user.language_code if user else 'en'
-            
             await event.respond(t(lang, 'help'))
-            
         except Exception as e:
             logger.error(f"Error in /help handler: {e}")
-    
-    @client.on(events.NewMessage(pattern='/mycase', incoming=True))
-    async def handle_mycase(event):
-        """Handle /mycase command."""
-        from core.models import Case, Document
-        
-        if not event.is_private:
-            return
-        
+
+    # ── Subject inline button callback ────────────────────────────────────────
+
+    @client.on(events.CallbackQuery(pattern=b'simple_subject_'))
+    async def cb_subject(event):
         try:
-            sender = await event.get_sender()
-            user, _ = await run_sync(lambda: _get_or_create_user(sender.id))
-            lang = user.language_code if user else 'en'
-            
-            # Get active case
-            def get_case_info():
-                case = Case.objects.filter(user=user, status='active').first()
-                if not case:
-                    return None
-                doc_count = Document.objects.filter(case=case).count()
-                return {
-                    'service': case.service,
-                    'status': case.status,
-                    'payment': case.payment_status,
-                    'doc_count': doc_count,
-                    'created': case.created_at.strftime('%Y-%m-%d')
-                }
-            
-            case_info = await run_sync(get_case_info)
-            
-            if not case_info:
-                await event.respond(t(lang, 'case_none'))
-            else:
-                await event.respond(t(lang, 'case_info', **case_info))
-            
+            data = event.data.decode()
+            subject_id = int(data.split('_')[-1])
+            uid = event.sender_id
+            await event.answer()
+            await _ub_handle_subject_selected(client, event.chat_id, uid, subject_id)
         except Exception as e:
-            logger.error(f"Error in /mycase handler: {e}")
-    
+            logger.error(f"cb_subject error: {e}")
+
+    # ── Service inline button callback ────────────────────────────────────────
+
+    @client.on(events.CallbackQuery(pattern=b'simple_service_'))
+    async def cb_service(event):
+        try:
+            data = event.data.decode()
+            service_id = int(data.split('_')[-1])
+            uid = event.sender_id
+            sender = await event.get_sender()
+            await event.answer()
+            await _ub_handle_service_selected(client, event.chat_id, uid, sender, service_id)
+        except Exception as e:
+            logger.error(f"cb_service error: {e}")
+
+    # ── Language callback (kept for compatibility) ─────────────────────────────
+
     @client.on(events.CallbackQuery(pattern=b'lang_'))
     async def handle_language_callback(event):
-        """Handle language selection callback."""
         from core.models import TgUser
-        
         try:
             lang_code = event.data.decode().replace('lang_', '')
             sender_id = event.sender_id
-            
-            # Update user language
-            def update_lang():
-                TgUser.objects.filter(telegram_id=sender_id).update(language_code=lang_code)
-            
-            await run_sync(update_lang)
-            
-            # Edit message with intro
-            intro = t(lang_code, 'intro')
-            await event.edit(f"{t(lang_code, 'language_changed')}\n\n{intro}")
+            await run_sync(lambda: TgUser.objects.filter(telegram_id=sender_id).update(language_code=lang_code))
+            set_state(sender_id, lang=lang_code)
+            await event.edit(f"{t(lang_code, 'language_changed')}\n\n{t(lang_code, 'intro')}")
             await event.answer()
-            
-            logger.info(f"[Account {account_index}] User {sender_id} changed lang to {lang_code}")
-            
         except Exception as e:
             logger.error(f"Error in language callback: {e}")
-    
+
+    # ── Text messages ──────────────────────────────────────────────────────────
+
     @client.on(events.NewMessage(incoming=True))
     async def handle_text_message(event):
-        """Handle text messages."""
-        # Skip commands and non-private messages
-        if not event.is_private or event.text.startswith('/') or event.media:
+        if not event.is_private or not event.text or event.text.startswith('/') or event.media:
             return
-        
         try:
             sender = await event.get_sender()
+            uid = sender.id
             text = event.text.strip()
-            
-            # If we don't have this user yet, check Telegram chat history first
-            user_exists = await run_sync(lambda: __user_exists_by_telegram_id(sender.id))
-            if not user_exists:
-                # Only import if there was real prior chat (≥3 messages). With 1–2 messages it's usually the first contact message (e.g. "Привет") and we must not treat as prior chat or AI will be off from the start.
-                try:
-                    hist = await client.get_messages(sender.id, limit=3)
-                    if hist and len(hist) >= 3:
-                        # Prior chat exists: import it, create user+case with ai_enabled=False, analyze with AI
-                        count, err = await fetch_and_save_chat(client, str(sender.id), limit=3000, import_req_id=None)
-                        if not err:
-                            await run_sync(lambda: _set_linked_account(sender.id, account_index))
-                            # Append current message to the new case (it wasn't in the fetched history yet)
-                            def add_current_message():
-                                from core.models import TgUser, Case
-                                u = TgUser.objects.get(telegram_id=sender.id)
-                                c = Case.objects.filter(user=u, status='active').order_by('-updated_at').first()
-                                if c:
-                                    c.add_message('user', text)
-                            await run_sync(add_current_message)
-                            logger.info(f"[Account {account_index}] New contact {sender.id} had prior chat; imported {count} messages, AI off")
-                        # No reply; consultant will handle
-                        return
-                except Exception as e:
-                    logger.debug(f"History check for {sender.id}: {e}")
-                # No prior chat: treat as really new user (AI on)
-            
-            # Get or create user
+
+            # Ensure user exists; set linked account
             user, user_created = await run_sync(lambda: _get_or_create_user(
                 sender.id, sender.first_name, sender.username
             ))
-            
-            # Set linked account
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
-            
-            # Fetch Telegram profile (photo, bio, username) when user is new
             if user_created:
                 try:
                     await fetch_telegram_profile_to_db(client, sender.id)
-                except Exception as e:
-                    logger.debug(f"Profile fetch for new user: {e}")
-            
-            lang = user.language_code if user else 'en'
-            
-            # Detect service with AI (Django ORM — must run in thread from async context)
-            detected = await run_sync(lambda: ai_detect_service(text))
+                except Exception:
+                    pass
 
-            # Get or create case; AI handles conversation from the start (no auto hello)
-            case = await run_sync(lambda: _get_or_open_case(user, detected or 'general'))
-            await run_sync(lambda: _add_message_to_case(case.pk, 'user', text))
+            state = get_state(uid)
+            step = state.get('step', STEP_INIT)
 
-            # Assign to responsible consultant as soon as service is known
-            if case.service != 'general' and not case.assigned_to:
-                def _early_assign():
-                    from core.models import Case
-                    from bot.bot import try_assign_case_to_consultant
-                    c = Case.objects.get(pk=case.pk)
-                    if c.service != 'general' and not c.assigned_to:
-                        try_assign_case_to_consultant(c, user)
-                try:
-                    await run_sync(_early_assign)
-                except Exception as e:
-                    logger.error(f"Early service assignment failed: {e}")
+            # Detect language on every text message
+            async def _detect():
+                return await run_sync(lambda: detect_lang(text, state.get('lang', 'en')))
 
-            # Global master switch or per-case toggle — no reply if either is off
-            if not is_ai_master_enabled() or not getattr(case, 'ai_enabled', True):
-                return
-
-            # Immediate bypass: user asked to talk to a real consultant directly
-            if wants_consultant_now(text):
-                def _do_redirect():
-                    from core.models import Case
-                    from bot.bot import try_assign_case_to_consultant
-                    c = Case.objects.get(pk=case.pk)
-                    try:
-                        try_assign_case_to_consultant(c, user)
-                    except Exception as exc:
-                        logger.error(f"Immediate consultant assignment failed: {exc}")
-                    c.ai_enabled = False
-                    c.save(update_fields=['ai_enabled'])
-                await run_sync(_do_redirect)
-                redirect_msg = t(lang, 'redirect_to_consultant')
-                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', redirect_msg))
-                await event.respond(redirect_msg)
-                logger.info(f"[Account {account_index}] Immediate consultant redirect for {sender.id}")
-                return
-
-            # Show typing while AI is generating (Telegram typing lasts ~5s, repeat every 4s)
-            async def typing_loop():
-                while True:
-                    await client(functions.messages.SetTypingRequest(peer=event.chat_id, action=SendMessageTypingAction()))
-                    await asyncio.sleep(4)
-
-            # Refetch case so get_conversation() includes the message we just added (in-memory case is stale)
-            def _get_ai_reply():
-                from core.models import Case
-                c = Case.objects.get(pk=case.pk)
-                return ask_ai(c.get_conversation(), c.service, lang)
-            get_ai_response_sync = _get_ai_reply
-            typing_task = asyncio.create_task(typing_loop())
+            typing_task = asyncio.create_task(_typing_loop_ub(client, event.chat_id))
             try:
-                reply = await run_sync(get_ai_response_sync)
+                lang = await _detect()
+                set_state(uid, lang=lang)
+
+                if step in (STEP_INIT, ''):
+                    subjects = await run_sync(get_active_subjects)
+                    msg = build_greeting(lang, subjects)
+                    buttons = _subject_buttons(subjects)
+                    await event.respond(msg, buttons=buttons or None)
+                    set_state(uid, step=STEP_SUBJECT, lang=lang)
+
+                elif step == STEP_SUBJECT:
+                    subjects = await run_sync(get_active_subjects)
+                    matched_id = None
+                    if text.isdigit():
+                        idx = int(text) - 1
+                        if 0 <= idx < len(subjects):
+                            matched_id = subjects[idx].pk
+                    if matched_id is None:
+                        matched_id = await run_sync(lambda: ai_match_subject(text, subjects, lang))
+                    if matched_id:
+                        await _ub_handle_subject_selected(client, event.chat_id, uid, matched_id)
+                    else:
+                        await event.respond(build_not_understood(lang))
+
+                elif step == STEP_SERVICE:
+                    subject_id = state.get('subject_id')
+                    services = await run_sync(lambda: get_services_for_subject(subject_id) if subject_id else [])
+                    matched_id = None
+                    if text.isdigit():
+                        idx = int(text) - 1
+                        if 0 <= idx < len(services):
+                            matched_id = services[idx].pk
+                    if matched_id is None:
+                        matched_id = await run_sync(lambda: ai_match_service(text, services, lang))
+                    if matched_id:
+                        await _ub_handle_service_selected(client, event.chat_id, uid, sender, matched_id)
+                    else:
+                        await event.respond(build_not_understood(lang))
+
+                elif step == STEP_COLLECTING:
+                    await _ub_handle_collecting(client, event.chat_id, uid, sender, text=text)
+
+                elif step == STEP_DONE:
+                    await event.respond(build_already_submitted(lang))
+
             finally:
                 typing_task.cancel()
                 try:
@@ -508,212 +567,103 @@ def register_handlers(client: TelegramClient, account_index: int):
                 except asyncio.CancelledError:
                     pass
 
-            if reply:
-                # Strip consultant-assignment marker and auto-disable AI when info collected
-                to_store = reply.replace(READY_FOR_CONSULTANT_MARKER, '').strip()
-                to_send = to_store
-                if READY_FOR_CONSULTANT_MARKER in reply:
-                    def assign_and_disable_ai():
-                        from core.models import Case
-                        from bot.bot import try_assign_case_to_consultant
-                        c = Case.objects.get(pk=case.pk)
-                        conv = c.get_conversation()
-                        # Minimum 2 messages (user + AI) to avoid accidental trigger
-                        if len(conv) >= 2:
-                            try_assign_case_to_consultant(c, user)
-                            c.ai_enabled = False
-                            c.save(update_fields=['ai_enabled'])
-                    await run_sync(assign_and_disable_ai)
-                # Save and send response
-                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', to_send))
-                await event.respond(to_send)
-                # Run profile extraction after every user message (throttled inside update_user_profile)
-                if user and should_update_profile(len(case.get_conversation())):
-                    try:
-                        await run_sync(lambda: update_user_profile(user.pk, force=False))
-                    except Exception as e:
-                        logger.debug(f"Profile update skipped or failed: {e}")
-            else:
-                await event.respond(t(lang, 'ai_error'))
-            
-            logger.info(f"[Account {account_index}] Message from {sender.id}: {text[:50]}...")
-            
+            logger.info(f"[Account {account_index}] Simple text from {sender.id}: {text[:50]}")
         except Exception as e:
             logger.error(f"Error handling text message: {e}")
-    
+
+    # ── Media messages ─────────────────────────────────────────────────────────
+
     @client.on(events.NewMessage(incoming=True, func=lambda e: e.media))
     async def handle_media(event):
-        """Handle media messages (photos, documents, voice, stickers)."""
         if not event.is_private or (event.text and event.text.startswith('/')):
             return
-        
         try:
             sender = await event.get_sender()
-            
-            # If new user, check for prior chat (same as text handler): need ≥3 messages to avoid treating first contact as prior chat
-            user_exists = await run_sync(lambda: __user_exists_by_telegram_id(sender.id))
-            if not user_exists:
-                try:
-                    hist = await client.get_messages(sender.id, limit=3)
-                    if hist and len(hist) >= 3:
-                        count, err = await fetch_and_save_chat(client, str(sender.id), limit=3000, import_req_id=None)
-                        if not err:
-                            await run_sync(lambda: _set_linked_account(sender.id, account_index))
-                            label = _first_media_label(event.media)
-                            def add_first_media():
-                                from core.models import TgUser, Case
-                                u = TgUser.objects.get(telegram_id=sender.id)
-                                c = Case.objects.filter(user=u, status='active').order_by('-updated_at').first()
-                                if c:
-                                    c.add_message('user', label)
-                            await run_sync(add_first_media)
-                            logger.info(f"[Account {account_index}] New contact {sender.id} sent media first; imported {count} messages")
-                        return
-                except Exception as e:
-                    logger.debug(f"History check for {sender.id}: {e}")
-            
-            user, _ = await run_sync(lambda: _get_or_create_user(
-                sender.id, sender.first_name, sender.username
-            ))
+            uid = sender.id
+            state = get_state(uid)
+            step = state.get('step', STEP_INIT)
+            lang = state.get('lang', 'en')
+
+            await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
-            
-            lang = user.language_code if user else 'en'
-            case = await run_sync(lambda: _get_or_open_case(user, 'general'))
-            conv = await run_sync(lambda: case.get_conversation())
-            
-            # First message shortcut applies only to stickers.
-            # Voice/photo/document must go through the normal download flow
-            # so voice can be transcribed and files can be saved correctly.
-            if len(conv) == 0 and isinstance(event.media, MessageMediaDocument):
-                doc0 = event.media.document
-                attrs0 = getattr(doc0, 'attributes', []) or []
-                if any(isinstance(a, DocumentAttributeSticker) for a in attrs0):
-                    label = _first_media_label(event.media)  # "[Sticker]"
-                    await run_sync(lambda: _add_message_to_case(case.pk, 'user', label))
-                    def _first_media_ai():
-                        from core.models import Case
-                        c = Case.objects.get(pk=case.pk)
-                        return ask_ai(c.get_conversation(), c.service, lang)
-                    reply = await run_sync(_first_media_ai)
-                    if reply:
-                        to_send = reply.replace(READY_FOR_CONSULTANT_MARKER, '').strip()
-                        await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', to_send))
-                        await event.respond(to_send)
-                    else:
-                        await event.respond(t(lang, 'ai_error'))
-                    logger.info(f"[Account {account_index}] First message from {sender.id} was sticker: AI replied")
-                    return
-            
-            # Download media
+
+            if step != STEP_COLLECTING:
+                subjects = await run_sync(get_active_subjects)
+                msg = build_greeting(lang, subjects)
+                buttons = _subject_buttons(subjects)
+                await event.respond(msg, buttons=buttons or None)
+                set_state(uid, step=STEP_SUBJECT, lang=lang)
+                return
+
+            case_id = state.get('case_id')
+            if not case_id:
+                clear_state(uid)
+                subjects = await run_sync(get_active_subjects)
+                await event.respond(build_greeting(lang, subjects),
+                                    buttons=_subject_buttons(subjects) or None)
+                set_state(uid, step=STEP_SUBJECT, lang=lang)
+                return
+
+            # Determine media type and filename
             unique_id = str(uuid4())[:8]
-            
             if isinstance(event.media, MessageMediaPhoto):
-                # Photo
                 ext = '.jpg'
-                filename = f"{unique_id}{ext}"
+                filename = f'{unique_id}{ext}'
                 media_type = 'photo'
-                msg_key = 'photo_received'
             elif isinstance(event.media, MessageMediaDocument):
-                # Document, voice, or video
-                doc = event.media.document
-                mime = doc.mime_type or ''
+                doc_tl = event.media.document
+                mime = doc_tl.mime_type or ''
                 ext = '.bin'
-                for attr in doc.attributes:
+                for attr in (doc_tl.attributes or []):
                     if hasattr(attr, 'file_name') and attr.file_name:
                         ext = os.path.splitext(attr.file_name)[1] or '.bin'
                         break
-                if mime.startswith('audio/') or any(getattr(attr, 'voice', False) for attr in (doc.attributes or [])):
+                if mime.startswith('audio/') or any(getattr(a, 'voice', False) for a in (doc_tl.attributes or [])):
                     ext = ext if ext != '.bin' else '.ogg'
                     media_type = 'voice'
-                    msg_key = 'voice_received'
                 elif mime.startswith('video/') or ext.lower() in ('.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'):
                     media_type = 'video'
-                    msg_key = 'doc_received'
                 else:
                     media_type = 'document'
-                    msg_key = 'doc_received'
-                filename = f"{unique_id}{ext}"
+                filename = f'{unique_id}{ext}'
             else:
                 return
-            
-            # Download file
+
             filepath = UPLOADS_DIR / filename
             await client.download_media(event.media, filepath)
 
-            # Add file reference to conversation so suggest_document_name has context
-            await run_sync(lambda: _add_message_to_case(
-                case.pk, 'user', f"[FILE:{unique_id}:{filename}:{media_type}]"
-            ))
-
-            # Suggest display name and create document record
-            def create_doc_with_name():
+            # Persist Document record
+            def _save_doc():
                 from core.models import Case
-                c = Case.objects.get(pk=case.pk)
-                conv = c.get_conversation()
-                suggested = suggest_document_name(conv, media_type, sender.id, ext)
-                display = f"{suggested}_{sender.id}{ext}" if suggested else f"{media_type}_{sender.id}{ext}"
+                c = Case.objects.get(pk=case_id)
                 return _create_document(
-                    case.pk, filename, os.path.splitext(filename)[1].lstrip('.') or 'unknown',
-                    unique_id, media_type, display_name=display
+                    case_id, filename, ext.lstrip('.') or 'unknown',
+                    unique_id, media_type,
+                    display_name=f'{media_type}_{sender.id}{ext}',
                 )
-            doc = await run_sync(create_doc_with_name)
+            doc_record = await run_sync(_save_doc)
 
-            # --- Voice transcription (silent — no intermediate messages) ---
-            transcription = None
-            if media_type == 'voice':
+            # .ogg voice note → transcribe and treat as text
+            if media_type == 'voice' and ext.lower() == '.ogg':
                 transcription = await run_sync(lambda: transcribe_voice(str(filepath), lang))
                 if transcription:
-                    def save_transcription():
-                        doc.transcription = transcription
-                        doc.save(update_fields=['transcription'])
-                    await run_sync(save_transcription)
-                    # Replace the raw [FILE:...] tag with the actual spoken text
-                    await run_sync(lambda: _add_message_to_case(
-                        case.pk, 'user', f"[Voice message]: {transcription}"
-                    ))
-                else:
-                    # Both APIs failed — ask the user to type instead
-                    await event.respond(t(lang, 'voice_ask_type'))
+                    def _save_transcription():
+                        doc_record.transcription = transcription
+                        doc_record.save(update_fields=['transcription'])
+                        from core.models import Case
+                        Case.objects.get(pk=case_id).add_message(
+                            'user', f'[Voice note transcription]: {transcription}'
+                        )
+                    await run_sync(_save_transcription)
+                    await _ub_handle_collecting(client, event.chat_id, uid, sender, text=transcription)
                     return
-            else:
-                # Acknowledge non-voice media (photos, documents)
-                await event.respond(t(lang, msg_key))
 
-            # Show typing while AI is generating
-            async def typing_loop_media():
-                while True:
-                    await client(functions.messages.SetTypingRequest(peer=event.chat_id, action=SendMessageTypingAction()))
-                    await asyncio.sleep(4)
-
-            def get_ai_and_maybe_rename():
-                from core.models import Case as _Case
-                c = _Case.objects.get(pk=case.pk)
-                conv = c.get_conversation()
-                reply = ask_ai(conv, c.service, lang)
-                if not reply:
-                    return None, None
-                cleaned, filename_label = parse_filename_from_response(reply)
-                cleaned = cleaned.strip()
-                if filename_label and doc:
-                    doc.display_name = f"{filename_label}_{sender.id}{ext}"
-                    doc.save(update_fields=['display_name'])
-                return cleaned, None
-
-            typing_task = asyncio.create_task(typing_loop_media())
-            try:
-                reply, _ = await run_sync(get_ai_and_maybe_rename)
-            finally:
-                typing_task.cancel()
-                try:
-                    await typing_task
-                except asyncio.CancelledError:
-                    pass
-            if reply:
-                await run_sync(lambda: _add_message_to_case(case.pk, 'assistant', reply))
-                await event.respond(reply)
-            
+            # All other files
+            await _ub_handle_collecting(
+                client, event.chat_id, uid, sender,
+                file_label=f'FILE:{unique_id}:{filename}:{media_type}',
+            )
             logger.info(f"[Account {account_index}] Media from {sender.id}: {filename}")
-            
         except Exception as e:
             logger.error(f"Error handling media: {e}")
 
