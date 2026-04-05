@@ -40,7 +40,7 @@ from .simple_flow import (
     is_done_message, generate_final_message,
     build_greeting, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
-    ai_contextual_reply,
+    ai_contextual_reply, ai_answer_question,
 )
 
 logging.basicConfig(
@@ -176,9 +176,24 @@ def _handle_collecting(chat_id: int, uid: int, tg_user: types.User,
         return
     if text:
         case.add_message('user', text)
+        # Answer clarifying questions; acknowledge data submissions
+        svc_def = None
+        svc_id = state.get('service_id')
+        if svc_id:
+            try:
+                from core.models import ServiceDefinition
+                svc_def = ServiceDefinition.objects.get(pk=svc_id)
+            except Exception:
+                pass
+        ai_reply = ai_answer_question(text, svc_def, lang)
+        if ai_reply:
+            case.add_message('assistant', ai_reply)
+            bot.send_message(chat_id, ai_reply)
+        else:
+            bot.send_message(chat_id, build_ack(lang))
     elif file_label:
         case.add_message('user', f'[{file_label}]')
-    bot.send_message(chat_id, build_ack(lang))
+        bot.send_message(chat_id, build_ack(lang))
 
 
 # ── /start ─────────────────────────────────────────────────────────────────────
@@ -205,9 +220,14 @@ def handle_text(message: types.Message) -> None:
     typing_t = threading.Thread(target=_typing_loop, args=(message.chat.id, stop_ev), daemon=True)
     typing_t.start()
     try:
-        detected = detect_lang(text, fallback=state.get('lang', 'en'))
-        set_state(uid, lang=detected)
-        lang = detected
+        stored_lang = state.get('lang', 'en')
+        # Only re-detect on meaningful text; skip short/numeric inputs like "1", "2"
+        if len(text) > 3 and not text.isdigit():
+            detected = detect_lang(text, fallback=stored_lang)
+            set_state(uid, lang=detected)
+            lang = detected
+        else:
+            lang = stored_lang
 
         if step in (STEP_INIT, ''):
             _send_subject_selection(message.chat.id, uid, lang)

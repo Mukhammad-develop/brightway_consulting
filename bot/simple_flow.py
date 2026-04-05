@@ -289,6 +289,50 @@ def is_done_message(text: str, lang: str = 'en') -> bool:
         return False
 
 
+def ai_answer_question(text: str, service_def, lang: str) -> str | None:
+    """
+    During the collecting step, determine whether the user's message is a
+    clarifying question or actual data being submitted.
+
+    Returns a brief answer string (in the user's language) if it's a question,
+    or None if it's data/information (caller should just acknowledge).
+    """
+    from bot.services import get_openai_client
+    client = get_openai_client()
+    if not client:
+        return None
+    lang_name = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}.get(lang, 'English')
+    svc_name = service_def.name if service_def else 'our service'
+    system = (
+        f'You are a helpful assistant for Brightway Consulting. '
+        f'The client is applying for "{svc_name}" and is in the process of submitting their documents and information.\n\n'
+        f'Decide: is this message a QUESTION asking for clarification, or is it information/data being provided?\n\n'
+        f'If it IS a question: answer it briefly and helpfully in {lang_name} (1-3 sentences). '
+        f'Then in the same language, remind them to continue sending the required information.\n\n'
+        f'If it is NOT a question (i.e. actual data, a name, a number, a file description, etc.): '
+        f'reply with exactly one word: DATA\n\n'
+        f'No markdown, no asterisks.'
+    )
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': system},
+                {'role': 'user', 'content': text},
+            ],
+            max_tokens=200,
+            temperature=0.3,
+            timeout=12,
+        )
+        answer = resp.choices[0].message.content.strip()
+        if answer.upper().startswith('DATA'):
+            return None
+        return answer
+    except Exception as e:
+        logger.warning('ai_answer_question error: %s', e)
+        return None
+
+
 def generate_final_message(lang: str) -> str:
     """Generate a unique paraphrased thank-you message in the user's language."""
     lang_name = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}.get(lang, 'English')

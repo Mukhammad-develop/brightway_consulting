@@ -52,7 +52,7 @@ from .simple_flow import (
     is_done_message,
     build_greeting, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
-    ai_contextual_reply,
+    ai_contextual_reply, ai_answer_question,
 )
 
 # Configure logging
@@ -404,10 +404,24 @@ async def _ub_handle_collecting(client: TelegramClient, chat_id: int,
 
     if text:
         await run_sync(lambda: case.add_message('user', text))
+        # Check if the user is asking a clarifying question; if so, answer it
+        svc_def = None
+        svc_id = state.get('service_id')
+        if svc_id:
+            try:
+                from core.models import ServiceDefinition
+                svc_def = await run_sync(lambda: ServiceDefinition.objects.get(pk=svc_id))
+            except Exception:
+                pass
+        ai_reply = await run_sync(lambda: ai_answer_question(text, svc_def, lang))
+        if ai_reply:
+            await run_sync(lambda: case.add_message('assistant', ai_reply))
+            await client.send_message(chat_id, ai_reply)
+        else:
+            await client.send_message(chat_id, build_ack(lang))
     elif file_label:
         await run_sync(lambda: case.add_message('user', f'[{file_label}]'))
-
-    await client.send_message(chat_id, build_ack(lang))
+        await client.send_message(chat_id, build_ack(lang))
 
 
 # ============== Handler Registration ==============
@@ -549,14 +563,16 @@ def register_handlers(client: TelegramClient, account_index: int):
             state = get_state(uid)
             step = state.get('step', STEP_INIT)
 
-            # Detect language on every text message
-            async def _detect():
-                return await run_sync(lambda: detect_lang(text, state.get('lang', 'en')))
-
             typing_task = asyncio.create_task(_typing_loop_ub(client, event.chat_id))
             try:
-                lang = await _detect()
-                set_state(uid, lang=lang)
+                # Only re-detect language on meaningful text; skip short/numeric
+                # inputs (e.g. "1", "2") to avoid overwriting the stored language.
+                stored_lang = state.get('lang', 'en')
+                if len(text) > 3 and not text.isdigit():
+                    lang = await run_sync(lambda: detect_lang(text, stored_lang))
+                    set_state(uid, lang=lang)
+                else:
+                    lang = stored_lang
 
                 if step in (STEP_INIT, ''):
                     subjects = await run_sync(get_active_subjects)
