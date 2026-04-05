@@ -185,7 +185,7 @@
                                 </div>
                                 {% endif %}
                             {% else %}
-                            <div class="msg-bubble">{% if msg.content %}{{ msg.content }}{% else %}<em>—</em>{% endif %}</div>
+                            <div class="msg-bubble">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
                             {% endif %}
                             <div class="msg-meta">{{ msg.role|title }}{% if msg.sender %} · {{ msg.sender }}{% endif %}{% if msg.timestamp %} · {{ msg.timestamp|slice:":16" }}{% endif %}</div>
                         </div>
@@ -448,7 +448,7 @@
                     '</div></div>';
             }
         } else {
-            const text = (content || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const text = (content || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
             bubbleHtml = '<div class="msg-bubble">' + text + '</div>';
         }
         const div = document.createElement('div');

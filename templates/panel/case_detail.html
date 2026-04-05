@@ -99,7 +99,7 @@
                                 </div>
                             </div>
                             {% else %}
-                            <div class="msg-bubble">{% if msg.content %}{{ msg.content }}{% else %}<em>—</em>{% endif %}</div>
+                            <div class="msg-bubble">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
                             {% endif %}
                             <div class="msg-meta">
                                 {{ msg.role|title }}

@@ -47,7 +47,7 @@ from .simple_flow import (
     get_state, set_state, clear_state,
     get_active_subjects, get_services_for_subject,
     db_get_or_create_user, db_get_or_open_case, db_link_case_to_service,
-    db_finalise_case,
+    db_flush_pending_messages, db_finalise_case,
     detect_lang, ai_match_subject, ai_match_service,
     is_done_message,
     build_greeting, build_service_list, build_collect_prompt,
@@ -363,6 +363,8 @@ async def _ub_handle_service_selected(client: TelegramClient, chat_id: int,
                                                                getattr(sender, 'username', None)))
     case = await run_sync(lambda: db_get_or_open_case(db_user, svc_def.slug))
     await run_sync(lambda: db_link_case_to_service(case, svc_def, state.get('subject_id')))
+    # Flush any user messages buffered before the case existed
+    await run_sync(lambda: db_flush_pending_messages(case, uid))
     items = await run_sync(lambda: svc_def.get_collect_items() or svc_def.get_documents_list() or [])
     prompt = build_collect_prompt(lang, svc_def, items)
     await client.send_message(chat_id, prompt)
@@ -575,13 +577,20 @@ def register_handlers(client: TelegramClient, account_index: int):
                     lang = stored_lang
 
                 if step in (STEP_INIT, ''):
+                    # Buffer user's opening message so it can be saved once a case exists
+                    pending = state.get('pending_msgs', [])
+                    pending.append(('user', text))
                     subjects = await run_sync(get_active_subjects)
                     msg = build_greeting(lang, subjects)
                     buttons = _subject_buttons(subjects)
                     await event.respond(msg, buttons=buttons or None)
-                    set_state(uid, step=STEP_SUBJECT, lang=lang)
+                    set_state(uid, step=STEP_SUBJECT, lang=lang, pending_msgs=pending)
 
                 elif step == STEP_SUBJECT:
+                    # Buffer this message too (user may type their subject name)
+                    pending = state.get('pending_msgs', [])
+                    pending.append(('user', text))
+                    set_state(uid, pending_msgs=pending)
                     subjects = await run_sync(get_active_subjects)
                     matched_id = None
                     if text.isdigit():

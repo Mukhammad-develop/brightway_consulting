@@ -95,6 +95,20 @@ def db_get_or_open_case(user, service_slug: str = 'general'):
     return case
 
 
+def db_flush_pending_messages(case, uid: int) -> None:
+    """
+    Flush any user messages buffered in state before the case existed
+    (i.e. sent during STEP_INIT / STEP_SUBJECT) into the case conversation.
+    """
+    state = get_state(uid)
+    pending = state.get('pending_msgs', [])
+    if not pending:
+        return
+    for role, content in pending:
+        case.add_message(role, content)
+    set_state(uid, pending_msgs=[])
+
+
 def db_link_case_to_service(case, service_def, subject_id: int = None):
     """Link a case to a ServiceDefinition and optionally a Subject. Saves the case."""
     from core.models import Subject
