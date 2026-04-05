@@ -470,7 +470,11 @@ def build_no_services(lang: str) -> str:
 
 
 def build_ack(lang: str) -> str:
-    return {'en': '✅ Received.', 'ru': '✅ Получено.', 'uz': '✅ Qabul qilindi.'}.get(lang, '✅')
+    return {
+        'en': '✅ Received. Keep sending the remaining files or information. When you have sent everything, write Done.',
+        'ru': '✅ Получено. Продолжайте отправлять оставшиеся файлы или информацию. Когда всё отправите, напишите Готово.',
+        'uz': "✅ Qabul qilindi. Qolgan fayllar yoki ma'lumotlarni yuborishda davom eting. Hammasini yuborganingizdan so'ng, Bitti deb yozing.",
+    }.get(lang, '✅ Received. Keep sending. Write Done when finished.')
 
 
 def build_already_submitted(lang: str) -> str:
