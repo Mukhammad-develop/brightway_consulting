@@ -326,9 +326,9 @@ def generate_final_message(lang: str) -> str:
 
 def build_greeting(lang: str, subjects: list) -> str:
     intro = {
-        'en': '👋 *Hello! Welcome to Brightway Consulting.*\n\nWhat service do you need help with?\nPlease choose a category:',
-        'ru': '👋 *Здравствуйте! Добро пожаловать в Brightway Consulting.*\n\nПо какой теме вам нужна помощь?\nПожалуйста, выберите категорию:',
-        'uz': "👋 *Salom! Brightway Consulting ga xush kelibsiz.*\n\nQaysi xizmat bo'yicha yordam kerak?\nIltimos, bir toifani tanlang:",
+        'en': '👋 Hello! Welcome to Brightway Consulting.\n\nWhat service do you need help with?\nPlease choose a category:',
+        'ru': '👋 Здравствуйте! Добро пожаловать в Brightway Consulting.\n\nПо какой теме вам нужна помощь?\nПожалуйста, выберите категорию:',
+        'uz': "👋 Salom! Brightway Consulting ga xush kelibsiz.\n\nQaysi xizmat bo'yicha yordam kerak?\nIltimos, bir toifani tanlang:",
     }.get(lang, '')
     lines = [f'{i}. {s.icon_emoji} {s.get_name(lang)}' for i, s in enumerate(subjects, 1)]
     return intro + ('\n\n' + '\n'.join(lines) if lines else '')
@@ -336,10 +336,10 @@ def build_greeting(lang: str, subjects: list) -> str:
 
 def build_service_list(lang: str, subject, services: list) -> str:
     intro = {
-        'en': f'*{subject.get_name(lang)}* — please choose a service:',
-        'ru': f'*{subject.get_name(lang)}* — пожалуйста, выберите услугу:',
-        'uz': f'*{subject.get_name(lang)}* — iltimos, xizmatni tanlang:',
-    }.get(lang, f'*{subject.get_name(lang)}*:')
+        'en': f'{subject.get_name(lang)} — please choose a service:',
+        'ru': f'{subject.get_name(lang)} — пожалуйста, выберите услугу:',
+        'uz': f'{subject.get_name(lang)} — iltimos, xizmatni tanlang:',
+    }.get(lang, f'{subject.get_name(lang)}:')
     lines = [intro]
     for i, svc in enumerate(services, 1):
         name = svc.name_ru if lang == 'ru' and svc.name_ru else (
@@ -354,15 +354,15 @@ def build_collect_prompt(lang: str, service_def, items: list) -> str:
         service_def.name_uz if lang == 'uz' and service_def.name_uz else service_def.name
     )
     intro = {
-        'en': f'*{svc_name}*\n\nPlease send the following:',
-        'ru': f'*{svc_name}*\n\nПожалуйста, отправьте следующее:',
-        'uz': f'*{svc_name}*\n\nQuyidagilarni yuboring:',
-    }.get(lang, f'*{svc_name}*\n\nPlease send:')
+        'en': f'{svc_name}\n\nPlease send the following:',
+        'ru': f'{svc_name}\n\nПожалуйста, отправьте следующее:',
+        'uz': f'{svc_name}\n\nQuyidagilarni yuboring:',
+    }.get(lang, f'{svc_name}\n\nPlease send:')
     numbered = '\n'.join(f'{i}. {item}' for i, item in enumerate(items, 1))
     hint = {
-        'en': '\n\nWhen you have sent everything, reply *Done*.',
-        'ru': '\n\nКогда всё отправите, напишите *Готово*.',
-        'uz': "\n\nHammani yuborganingizdan so'ng, *Bitti* deb yozing.",
+        'en': "\n\nWhen you have sent everything, reply Done.",
+        'ru': '\n\nКогда всё отправите, напишите Готово.',
+        'uz': "\n\nHammani yuborganingizdan so'ng, Bitti deb yozing.",
     }.get(lang, '')
     return f'{intro}\n\n{numbered}{hint}'
 
@@ -373,6 +373,48 @@ def build_not_understood(lang: str) -> str:
         'ru': 'Извините, не понял. Пожалуйста, выберите из списка выше.',
         'uz': "Kechirasiz, tushunmadim. Iltimos, yuqoridagi ro'yxatdan tanlang.",
     }.get(lang, 'Please choose from the list.')
+
+
+def ai_contextual_reply(text: str, options: list, step: str, lang: str) -> str:
+    """
+    When the user's input doesn't directly match a subject/service, use AI to
+    understand what they said and respond naturally, then guide them to choose
+    from the available options. Falls back to build_not_understood on failure.
+    """
+    lang_name = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}.get(lang, 'English')
+    if step == STEP_SUBJECT:
+        context = 'The user needs to choose a service category. Available categories:\n' + '\n'.join(f'- {o}' for o in options)
+    elif step == STEP_SERVICE:
+        context = 'The user needs to choose a specific service. Available services:\n' + '\n'.join(f'- {o}' for o in options)
+    else:
+        context = 'Available options:\n' + '\n'.join(f'- {o}' for o in options)
+    system = (
+        f'You are a helpful assistant for Brightway Consulting, a consulting firm. '
+        f'Always reply in {lang_name}. '
+        f'{context}\n\n'
+        'Understand what the user said, respond naturally and warmly, '
+        'then politely ask them to choose one of the options above. '
+        'Keep it concise (2-3 sentences max). No markdown, no asterisks.'
+    )
+    from bot.services import get_openai_client
+    client = get_openai_client()
+    if not client:
+        return build_not_understood(lang)
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': system},
+                {'role': 'user', 'content': text},
+            ],
+            max_tokens=150,
+            temperature=0.4,
+            timeout=10,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        logger.warning('ai_contextual_reply error: %s', e)
+        return build_not_understood(lang)
 
 
 def build_no_services(lang: str) -> str:

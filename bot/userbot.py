@@ -52,6 +52,7 @@ from .simple_flow import (
     is_done_message,
     build_greeting, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
+    ai_contextual_reply,
 )
 
 # Configure logging
@@ -128,8 +129,18 @@ def _get_or_create_user(tg_id: int, first_name: str = None, username: str = None
 def _set_linked_account(tg_id: int, account_index: int):
     """Set linked account for user."""
     from core.models import TgUser
-    
     TgUser.objects.filter(telegram_id=tg_id).update(linked_account=account_index)
+
+
+def _check_ai_disabled(tg_id: int) -> bool:
+    """Return True if the user's active case has ai_enabled=False (consultant mode)."""
+    from core.models import Case, TgUser
+    try:
+        user = TgUser.objects.get(telegram_id=tg_id)
+        case = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
+        return bool(case and not case.ai_enabled)
+    except Exception:
+        return False
 
 
 def _get_or_open_case(user, service='general'):
@@ -495,6 +506,28 @@ def register_handlers(client: TelegramClient, account_index: int):
             uid = sender.id
             text = event.text.strip()
 
+            # ── History detection ──────────────────────────────────────────────
+            # If this user is not in our DB yet, check if there's an existing
+            # Telegram conversation (≥3 messages). If yes, import the history
+            # and let the consultant handle — do NOT reply with the simplified flow.
+            user_existed = await run_sync(lambda: __user_exists_by_telegram_id(sender.id))
+            if not user_existed:
+                try:
+                    hist = await client.get_messages(sender.id, limit=3)
+                    if hist and len(hist) >= 3:
+                        count, err = await fetch_and_save_chat(
+                            client, str(sender.id), limit=3000, import_req_id=None
+                        )
+                        if not err:
+                            await run_sync(lambda: _set_linked_account(sender.id, account_index))
+                        logger.info(
+                            '[Account %s] Existing history (%d msgs) for %s — imported, consultant handles',
+                            account_index, count, sender.id,
+                        )
+                        return  # stay silent; consultant handles this chat
+                except Exception as hist_err:
+                    logger.debug('History detection error for %s: %s', sender.id, hist_err)
+
             # Ensure user exists; set linked account
             user, user_created = await run_sync(lambda: _get_or_create_user(
                 sender.id, sender.first_name, sender.username
@@ -505,6 +538,13 @@ def register_handlers(client: TelegramClient, account_index: int):
                     await fetch_telegram_profile_to_db(client, sender.id)
                 except Exception:
                     pass
+
+            # ── AI-disabled check ─────────────────────────────────────────────
+            # If a consultant has taken over (ai_enabled=False on the case),
+            # stay completely silent so the consultant can chat freely.
+            if await run_sync(lambda: _check_ai_disabled(sender.id)):
+                logger.debug('[Account %s] AI disabled for %s — skipping', account_index, sender.id)
+                return
 
             state = get_state(uid)
             step = state.get('step', STEP_INIT)
@@ -537,7 +577,9 @@ def register_handlers(client: TelegramClient, account_index: int):
                     if matched_id:
                         await _ub_handle_subject_selected(client, event.chat_id, uid, matched_id)
                     else:
-                        await event.respond(build_not_understood(lang))
+                        options = [f'{s.icon_emoji} {s.get_name(lang)}' for s in subjects]
+                        reply = await run_sync(lambda: ai_contextual_reply(text, options, STEP_SUBJECT, lang))
+                        await event.respond(reply)
 
                 elif step == STEP_SERVICE:
                     subject_id = state.get('subject_id')
@@ -552,7 +594,9 @@ def register_handlers(client: TelegramClient, account_index: int):
                     if matched_id:
                         await _ub_handle_service_selected(client, event.chat_id, uid, sender, matched_id)
                     else:
-                        await event.respond(build_not_understood(lang))
+                        options = [f'{svc.icon_emoji} {svc.name}' for svc in services]
+                        reply = await run_sync(lambda: ai_contextual_reply(text, options, STEP_SERVICE, lang))
+                        await event.respond(reply)
 
                 elif step == STEP_COLLECTING:
                     await _ub_handle_collecting(client, event.chat_id, uid, sender, text=text)
@@ -580,12 +624,37 @@ def register_handlers(client: TelegramClient, account_index: int):
         try:
             sender = await event.get_sender()
             uid = sender.id
-            state = get_state(uid)
-            step = state.get('step', STEP_INIT)
-            lang = state.get('lang', 'en')
+
+            # ── History detection (same logic as text handler) ─────────────────
+            user_existed = await run_sync(lambda: __user_exists_by_telegram_id(sender.id))
+            if not user_existed:
+                try:
+                    hist = await client.get_messages(sender.id, limit=3)
+                    if hist and len(hist) >= 3:
+                        count, err = await fetch_and_save_chat(
+                            client, str(sender.id), limit=3000, import_req_id=None
+                        )
+                        if not err:
+                            await run_sync(lambda: _set_linked_account(sender.id, account_index))
+                        logger.info(
+                            '[Account %s] Existing history for %s (media) — imported, consultant handles',
+                            account_index, sender.id,
+                        )
+                        return
+                except Exception as hist_err:
+                    logger.debug('History detection error (media) for %s: %s', sender.id, hist_err)
 
             await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
+
+            # ── AI-disabled check ─────────────────────────────────────────────
+            if await run_sync(lambda: _check_ai_disabled(sender.id)):
+                logger.debug('[Account %s] AI disabled for %s (media) — skipping', account_index, sender.id)
+                return
+
+            state = get_state(uid)
+            step = state.get('step', STEP_INIT)
+            lang = state.get('lang', 'en')
 
             if step != STEP_COLLECTING:
                 subjects = await run_sync(get_active_subjects)

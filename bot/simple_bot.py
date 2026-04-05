@@ -40,6 +40,7 @@ from .simple_flow import (
     is_done_message, generate_final_message,
     build_greeting, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
+    ai_contextual_reply,
 )
 
 logging.basicConfig(
@@ -69,7 +70,7 @@ if not BOT_TOKEN:
     bot = _DummyBot()
     _BOT_AVAILABLE = False
 else:
-    bot = telebot.TeleBot(BOT_TOKEN, parse_mode='Markdown')
+    bot = telebot.TeleBot(BOT_TOKEN)
     _BOT_AVAILABLE = True
 
 
@@ -222,7 +223,8 @@ def handle_text(message: types.Message) -> None:
             if matched_id:
                 _handle_subject_selected(message.chat.id, uid, matched_id)
             else:
-                bot.send_message(message.chat.id, build_not_understood(lang))
+                options = [f'{s.icon_emoji} {s.get_name(lang)}' for s in subjects]
+                bot.send_message(message.chat.id, ai_contextual_reply(text, options, STEP_SUBJECT, lang))
 
         elif step == STEP_SERVICE:
             subject_id = state.get('subject_id')
@@ -236,7 +238,8 @@ def handle_text(message: types.Message) -> None:
             if matched_id:
                 _handle_service_selected(message.chat.id, uid, message.from_user, matched_id)
             else:
-                bot.send_message(message.chat.id, build_not_understood(lang))
+                options = [f'{svc.icon_emoji} {svc.name}' for svc in services]
+                bot.send_message(message.chat.id, ai_contextual_reply(text, options, STEP_SERVICE, lang))
 
         elif step == STEP_COLLECTING:
             _handle_collecting(message.chat.id, uid, message.from_user, text=text)
