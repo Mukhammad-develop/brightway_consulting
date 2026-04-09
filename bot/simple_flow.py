@@ -24,6 +24,7 @@ STEP_INIT = 'init'
 STEP_SUBJECT = 'awaiting_subject'
 STEP_SERVICE = 'awaiting_service'
 STEP_COLLECTING = 'collecting'
+STEP_CONFIRM_CONSULTANT = 'confirm_consultant'
 STEP_DONE = 'done'
 
 _STATE_TTL_SECONDS = 3600  # idle state expires after 1 hour
@@ -384,9 +385,21 @@ def generate_final_message(lang: str) -> str:
 
 def build_greeting(lang: str, subjects: list) -> str:
     intro = {
-        'en': '👋 Hello! Welcome to Brightway Consulting.\n\nWhat service do you need help with?\nPlease choose a category:',
-        'ru': '👋 Здравствуйте! Добро пожаловать в Brightway Consulting.\n\nПо какой теме вам нужна помощь?\nПожалуйста, выберите категорию:',
-        'uz': "👋 Salom! Brightway Consulting ga xush kelibsiz.\n\nQaysi xizmat bo'yicha yordam kerak?\nIltimos, bir toifani tanlang:",
+        'en': (
+            '👋 Hello! Welcome to Brightway Consulting.\n\n'
+            'I collect your details and pass them to our consultant, who will then assist you directly.\n\n'
+            'What service do you need help with?\nPlease choose a category:'
+        ),
+        'ru': (
+            '👋 Здравствуйте! Добро пожаловать в Brightway Consulting.\n\n'
+            'Я собираю ваши данные и передаю их консультанту, который свяжется с вами напрямую.\n\n'
+            'По какой теме вам нужна помощь?\nПожалуйста, выберите категорию:'
+        ),
+        'uz': (
+            '👋 Salom! Brightway Consulting ga xush kelibsiz.\n\n'
+            "Men sizning ma'lumotlaringizni to'plab, konsultantga yetkazaman — u siz bilan to'g'ridan-to'g'ri bog'lanadi.\n\n"
+            "Qaysi xizmat bo'yicha yordam kerak?\nIltimos, bir toifani tanlang:"
+        ),
     }.get(lang, '')
     lines = [f'{i}. {s.icon_emoji} {s.get_name(lang)}' for i, s in enumerate(subjects, 1)]
     return intro + ('\n\n' + '\n'.join(lines) if lines else '')
@@ -497,3 +510,75 @@ def build_already_submitted(lang: str) -> str:
         'ru': 'Ваша заявка уже отправлена. Консультант свяжется с вами.',
         'uz': "Arizangiz allaqachon yuborildi. Konsultant siz bilan bog'lanadi.",
     }.get(lang, 'Your request has already been submitted.')
+
+
+def build_consultant_confirm(lang: str) -> str:
+    return {
+        'en': 'Would you like me to connect you to a consultant now? They will get back to you as soon as possible. Reply Yes or No.',
+        'ru': 'Хотите, чтобы я соединил вас с консультантом прямо сейчас? Они свяжутся с вами как можно скорее. Ответьте Да или Нет.',
+        'uz': "Sizni hozir konsultant bilan bog'laymmi? Ular imkon qadar tezroq siz bilan bog'lanadi. Ha yoki Yo'q deb javob bering.",
+    }.get(lang, 'Would you like me to connect you to a consultant? Reply Yes or No.')
+
+
+def build_consultant_declined(lang: str) -> str:
+    return {
+        'en': 'No problem. Continue sending your information whenever you are ready.',
+        'ru': 'Хорошо. Продолжайте отправлять информацию, когда будете готовы.',
+        'uz': "Mayli. Tayyor bo'lganingizda ma'lumotlaringizni yuborishda davom eting.",
+    }.get(lang, 'No problem. Continue whenever you are ready.')
+
+
+# Specific multi-word phrases that clearly indicate a consultant request
+_CONSULTANT_PHRASES = [
+    'connect me', 'speak to', 'talk to', 'want a consultant', 'need a consultant',
+    'contact consultant', 'real person', 'human agent', 'live agent', 'speak with someone',
+    'соедини', 'поговорить с консультант', 'живой человек', 'консультант нужен',
+    'konsultant bilan', 'ulang meni', 'konsultant kerak', "bog'lang", 'jonli odam',
+]
+
+
+def wants_consultant(text: str, lang: str = 'en') -> bool:
+    """Return True if the user is clearly asking to be connected to a human consultant."""
+    lower = text.strip().lower()
+    for phrase in _CONSULTANT_PHRASES:
+        if phrase in lower:
+            return True
+    # AI fallback for less obvious phrasing
+    from bot.services import get_openai_client
+    client = get_openai_client()
+    if not client:
+        return False
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content': (
+                    'Does this message clearly express a desire to speak with or be connected '
+                    'to a human consultant, agent, or support person? '
+                    'Reply YES or NO only. If unsure, reply NO.'
+                )},
+                {'role': 'user', 'content': text},
+            ],
+            max_tokens=3, temperature=0.0, timeout=8,
+        )
+        return resp.choices[0].message.content.strip().upper().startswith('YES')
+    except Exception:
+        return False
+
+
+_YES_WORDS = {'yes', 'yeah', 'yep', 'ok', 'okay', 'sure', 'please', 'do it',
+              'да', 'хорошо', 'ладно', 'конечно',
+              'ha', "xo'sh", 'albatta', "bo'ldi", 'yaxshi', 'lol'}
+_NO_WORDS = {'no', 'nope', 'cancel', 'back', 'stop',
+             'нет', 'отмена', 'назад', 'не надо',
+             "yo'q", 'bekor', 'ortga', 'kerak emas'}
+
+
+def is_confirm_yes(text: str) -> bool:
+    lower = text.strip().lower()
+    return any(w in lower for w in _YES_WORDS)
+
+
+def is_confirm_no(text: str) -> bool:
+    lower = text.strip().lower()
+    return any(w in lower for w in _NO_WORDS)

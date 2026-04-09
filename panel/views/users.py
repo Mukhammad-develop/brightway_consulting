@@ -202,9 +202,16 @@ def user_detail(request, user_id):
             .first()
         )
         assigned_admin = getattr(last_assigned, 'assigned_to', None)
-    conversation = active_case.get_conversation() if active_case else []
-    file_refs = get_file_refs_for_conversation(active_case, conversation)
-    conversation_display = build_conversation_display(conversation, file_refs)
+    # Merge conversations from ALL user cases (imported + simplified flow)
+    # so the full chat history is visible in one view, sorted by timestamp.
+    all_msgs = []
+    combined_file_refs = {}
+    for c in Case.objects.filter(user=user).order_by('created_at'):
+        msgs = c.get_conversation()
+        all_msgs.extend(msgs)
+        combined_file_refs.update(get_file_refs_for_conversation(c, msgs))
+    all_msgs.sort(key=lambda m: m.get('timestamp', ''))
+    conversation_display = build_conversation_display(all_msgs, combined_file_refs)
     
     # Get current admin for permission checks
     current_admin = get_current_admin(request)

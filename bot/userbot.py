@@ -43,15 +43,16 @@ from .services import (
     READY_FOR_CONSULTANT_MARKER,
 )
 from .simple_flow import (
-    STEP_INIT, STEP_SUBJECT, STEP_SERVICE, STEP_COLLECTING, STEP_DONE,
+    STEP_INIT, STEP_SUBJECT, STEP_SERVICE, STEP_COLLECTING, STEP_CONFIRM_CONSULTANT, STEP_DONE,
     get_state, set_state, clear_state,
     get_active_subjects, get_services_for_subject,
     db_get_or_create_user, db_get_or_open_case, db_link_case_to_service,
     db_flush_pending_messages, db_finalise_case,
     detect_lang, ai_match_subject, ai_match_service,
-    is_done_message,
+    is_done_message, wants_consultant, is_confirm_yes, is_confirm_no,
     build_greeting, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
+    build_consultant_confirm, build_consultant_declined,
     ai_contextual_reply, ai_answer_question,
 )
 
@@ -575,6 +576,29 @@ def register_handlers(client: TelegramClient, account_index: int):
                     set_state(uid, lang=lang)
                 else:
                     lang = stored_lang
+
+                # ── Consultant connect request (any active step) ───────────────
+                if step not in (STEP_DONE, STEP_CONFIRM_CONSULTANT):
+                    if await run_sync(lambda: wants_consultant(text, lang)):
+                        set_state(uid, step=STEP_CONFIRM_CONSULTANT, prev_step=step)
+                        await event.respond(build_consultant_confirm(lang))
+                        return
+
+                # ── Consultant confirmation ───────────────────────────────────
+                if step == STEP_CONFIRM_CONSULTANT:
+                    if is_confirm_yes(text):
+                        final_msg = await run_sync(
+                            lambda: db_finalise_case(uid, sender.id, sender.first_name,
+                                                     getattr(sender, 'username', None), lang)
+                        )
+                        await event.respond(final_msg)
+                    elif is_confirm_no(text):
+                        prev = state.get('prev_step', STEP_COLLECTING)
+                        set_state(uid, step=prev)
+                        await event.respond(build_consultant_declined(lang))
+                    else:
+                        await event.respond(build_consultant_confirm(lang))
+                    return
 
                 if step in (STEP_INIT, ''):
                     # Buffer user's opening message so it can be saved once a case exists

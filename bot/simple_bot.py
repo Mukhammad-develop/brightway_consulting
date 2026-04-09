@@ -31,15 +31,16 @@ from django.conf import settings
 
 from .services import transcribe_voice
 from .simple_flow import (
-    STEP_INIT, STEP_SUBJECT, STEP_SERVICE, STEP_COLLECTING, STEP_DONE,
+    STEP_INIT, STEP_SUBJECT, STEP_SERVICE, STEP_COLLECTING, STEP_CONFIRM_CONSULTANT, STEP_DONE,
     get_state, set_state, clear_state,
     get_active_subjects, get_services_for_subject,
     db_get_or_create_user, db_get_or_open_case, db_link_case_to_service,
     db_try_assign_consultant, db_notify_consultant, db_finalise_case,
     detect_lang, ai_match_subject, ai_match_service,
-    is_done_message, generate_final_message,
+    is_done_message, generate_final_message, wants_consultant, is_confirm_yes, is_confirm_no,
     build_greeting, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
+    build_consultant_confirm, build_consultant_declined,
     ai_contextual_reply, ai_answer_question,
 )
 
@@ -228,6 +229,27 @@ def handle_text(message: types.Message) -> None:
             lang = detected
         else:
             lang = stored_lang
+
+        # ── Consultant connect request (any active step) ──────────────────
+        if step not in (STEP_DONE, STEP_CONFIRM_CONSULTANT):
+            if wants_consultant(text, lang):
+                set_state(uid, step=STEP_CONFIRM_CONSULTANT, prev_step=step)
+                bot.send_message(message.chat.id, build_consultant_confirm(lang))
+                return
+
+        # ── Consultant confirmation ───────────────────────────────────────
+        if step == STEP_CONFIRM_CONSULTANT:
+            if is_confirm_yes(text):
+                final_msg = db_finalise_case(uid, message.from_user.id, message.from_user.first_name,
+                                             message.from_user.username, lang)
+                bot.send_message(message.chat.id, final_msg)
+            elif is_confirm_no(text):
+                prev = state.get('prev_step', STEP_COLLECTING)
+                set_state(uid, step=prev)
+                bot.send_message(message.chat.id, build_consultant_declined(lang))
+            else:
+                bot.send_message(message.chat.id, build_consultant_confirm(lang))
+            return
 
         if step in (STEP_INIT, ''):
             _send_subject_selection(message.chat.id, uid, lang)
