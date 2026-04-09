@@ -387,17 +387,17 @@ def build_greeting(lang: str, subjects: list) -> str:
     intro = {
         'en': (
             '👋 Hello! Welcome to Brightway Consulting.\n\n'
-            'I collect your details and pass them to our consultant, who will then assist you directly.\n\n'
+            'I am an AI assistant. I will collect your details and pass them to our consultant, who will then assist you directly.\n\n'
             'What service do you need help with?\nPlease choose a category:'
         ),
         'ru': (
             '👋 Здравствуйте! Добро пожаловать в Brightway Consulting.\n\n'
-            'Я собираю ваши данные и передаю их консультанту, который свяжется с вами напрямую.\n\n'
+            'Я — ИИ-помощник. Я собираю ваши данные и передаю их консультанту, который свяжется с вами напрямую.\n\n'
             'По какой теме вам нужна помощь?\nПожалуйста, выберите категорию:'
         ),
         'uz': (
             '👋 Salom! Brightway Consulting ga xush kelibsiz.\n\n'
-            "Men sizning ma'lumotlaringizni to'plab, konsultantga yetkazaman — u siz bilan to'g'ridan-to'g'ri bog'lanadi.\n\n"
+            "Men sun'iy intellekt yordamchisiman. Sizning ma'lumotlaringizni to'plab, konsultantga yetkazaman — u siz bilan to'g'ridan-to'g'ri bog'lanadi.\n\n"
             "Qaysi xizmat bo'yicha yordam kerak?\nIltimos, bir toifani tanlang:"
         ),
     }.get(lang, '')
