@@ -152,6 +152,16 @@
                         <button type="button" class="btn btn-sm btn-outline" id="aiToggleBtn" data-case-id="{{ active_case.pk }}" data-toggle-url="{% url 'panel:case_toggle_ai' active_case.pk %}" title="Turn AI responses on or off for this chat">Toggle AI</button>
                     </span>
                     {% endif %}
+                    <form method="post" action="{% url 'panel:user_fix_chat' user_obj.pk %}" style="margin:0;" id="fixChatForm">
+                        {% csrf_token %}
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                            <button type="submit" class="btn btn-sm btn-outline" id="fixChatBtn"
+                                    onclick="this.disabled=true;this.textContent='Queued…';this.closest('form').submit();">
+                                Fix Chat
+                            </button>
+                            <span style="font-size:0.7rem;color:var(--text-secondary);white-space:nowrap;">Re-pull if chat looks wrong or incomplete</span>
+                        </div>
+                    </form>
                 </div>
                 <div class="card-body chat-wrap">
                     {% if conversation %}

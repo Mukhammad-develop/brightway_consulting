@@ -652,3 +652,36 @@ def poll_messages(request, user_id):
         'messages': all_messages,
         'file_docs': file_docs,
     })
+
+
+@login_required
+@require_POST
+def user_fix_chat(request, user_id):
+    """
+    Queue a re-import of the user's Telegram chat history.
+    The userbot's import_queue_loop will pick it up and replace the conversation.
+    """
+    from core.models import ImportRequest
+    user = get_object_or_404(TgUser, pk=user_id)
+
+    if not user.telegram_id:
+        messages.error(request, 'This user has no Telegram ID — cannot re-import chat.')
+        return redirect('panel:user_detail', user_id=user_id)
+
+    # Cancel any existing pending/processing import for this user to avoid duplicates
+    ImportRequest.objects.filter(
+        user_tg_id=str(user.telegram_id),
+        status__in=['pending', 'processing'],
+    ).update(status='cancelled')
+
+    ImportRequest.objects.create(
+        user_tg_id=str(user.telegram_id),
+        label=f'Fix chat (user #{user_id})',
+        status='pending',
+    )
+    messages.success(
+        request,
+        'Chat re-import queued. The userbot will fetch the full history shortly — '
+        'refresh this page in a minute to see the updated conversation.'
+    )
+    return redirect('panel:user_detail', user_id=user_id)
