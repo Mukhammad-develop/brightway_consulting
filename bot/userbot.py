@@ -1044,39 +1044,99 @@ async def import_queue_loop(clients: list):
 async def fetch_and_save_chat(client: TelegramClient, user_tg_id: str, limit: int = 3000, import_req_id: int = None):
     """
     Fetch chat history with peer, save to DB: get_or_create user, create case with conversation.
+    Downloads voice and photo attachments so they appear as playable media in the panel.
     If there was any prior chat (len(conversation) > 0), set ai_enabled=False. Run profile extraction.
     Returns (message_count, error_str). If import_req_id is set, update that ImportRequest.
     """
     from core.models import TgUser, Case, ImportRequest
-    
+    import uuid as _uuid
+    import os as _os
+    from django.conf import settings as _settings
+
     try:
         peer = int(user_tg_id) if user_tg_id.isdigit() else user_tg_id
         messages = await client.get_messages(peer, limit=limit)
         messages = list(reversed(messages))
-        
-        conversation = []
+
+        media_root = getattr(_settings, 'MEDIA_ROOT', 'uploads')
+        _os.makedirs(media_root, exist_ok=True)
+
+        # Each entry: (role, content, timestamp, doc_info_or_None)
+        # doc_info = {'uid': str, 'filename': str, 'media_type': str} when media was downloaded
+        raw_entries = []
+
         for msg in messages:
             if not msg.text and not msg.media:
                 continue
             role = _telegram_message_role(msg)
-            content = msg.text or "[media attachment]"
-            conversation.append({
-                'role': role,
-                'content': content,
-                'timestamp': msg.date.isoformat() if msg.date else datetime.now().isoformat()
-            })
+            ts = msg.date.isoformat() if msg.date else datetime.now().isoformat()
+
+            if msg.text:
+                raw_entries.append((role, msg.text, ts, None))
+                continue
+
+            # Media message — try to classify and download
+            media = msg.media
+            media_type = None
+            try:
+                from telethon.tl.types import (
+                    MessageMediaPhoto, MessageMediaDocument,
+                    DocumentAttributeAudio, DocumentAttributeSticker,
+                )
+                if isinstance(media, MessageMediaPhoto):
+                    media_type = 'photo'
+                elif isinstance(media, MessageMediaDocument) and media.document:
+                    attrs = media.document.attributes or []
+                    if any(isinstance(a, DocumentAttributeSticker) for a in attrs):
+                        media_type = 'sticker'
+                    elif any(isinstance(a, DocumentAttributeAudio) and getattr(a, 'voice', False) for a in attrs):
+                        media_type = 'voice'
+                    elif any(isinstance(a, DocumentAttributeAudio) for a in attrs):
+                        media_type = 'audio'
+                    else:
+                        media_type = 'document'
+            except Exception:
+                media_type = 'document'
+
+            if media_type == 'sticker':
+                raw_entries.append((role, '[Sticker]', ts, None))
+                continue
+
+            # Download voice and photo files; skip other media to keep import fast
+            if media_type in ('voice', 'photo'):
+                try:
+                    ext = '.ogg' if media_type == 'voice' else '.jpg'
+                    uid = _uuid.uuid4().hex
+                    filename = f"import_{media_type}_{uid}{ext}"
+                    dest = _os.path.join(media_root, filename)
+                    await client.download_media(msg, file=dest)
+                    raw_entries.append((role, f'[FILE:{uid}:{filename}:{media_type}]', ts,
+                                        {'uid': uid, 'filename': filename, 'media_type': media_type}))
+                    continue
+                except Exception as e:
+                    logger.warning(f"Could not download {media_type} during import: {e}")
+
+            label = {'photo': '[Photo]', 'audio': '[Audio]', 'document': '[Document]'}.get(media_type, '[Attachment]')
+            raw_entries.append((role, label, ts, None))
+
+        conversation = [
+            {'role': r, 'content': c, 'timestamp': t}
+            for r, c, t, _ in raw_entries
+        ]
+        downloaded_docs = [(r, c, t, d) for r, c, t, d in raw_entries if d]
         
         def save_import():
+            from core.models import Document as _Document
             try:
                 tg_id = int(user_tg_id)
             except ValueError:
                 return 0, "Invalid Telegram ID"
-            
+
             user, _ = TgUser.objects.get_or_create(
                 telegram_id=tg_id,
                 defaults={'language_code': 'en'}
             )
-            # Re-import: replace conversation on existing active case so we don't create duplicates and can fix bad data
+            # Re-import: replace conversation on existing active case
             existing = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
             if existing:
                 existing.conversation_history = json.dumps(conversation)
@@ -1091,6 +1151,24 @@ async def fetch_and_save_chat(client: TelegramClient, user_tg_id: str, limit: in
                     conversation_history=json.dumps(conversation),
                     ai_enabled=False
                 )
+
+            # Create Document records for downloaded media so panel can serve them
+            existing_uids = set(
+                _Document.objects.filter(case=case, file_unique_id__isnull=False)
+                .values_list('file_unique_id', flat=True)
+            )
+            for _, _, _, doc_info in downloaded_docs:
+                if doc_info['uid'] in existing_uids:
+                    continue
+                _Document.objects.create(
+                    case=case,
+                    file_path=doc_info['filename'],
+                    display_name=doc_info['filename'],
+                    telegram_file_id=f"local:{doc_info['filename']}",
+                    file_unique_id=doc_info['uid'],
+                    media_type=doc_info['media_type'],
+                )
+
             if import_req_id:
                 req = ImportRequest.objects.get(pk=import_req_id)
                 req.status = 'done'

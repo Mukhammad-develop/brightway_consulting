@@ -597,13 +597,14 @@ def send_message(request, user_id):
 @require_POST
 def send_voice_message(request, user_id):
     """
-    Accept a recorded audio blob from the admin panel, save it as .ogg,
-    and queue it in PendingSend so the userbot sends it as a Telegram voice note.
+    Accept a recorded audio blob from the admin panel, save it to MEDIA_ROOT,
+    create a Document record so the panel shows an audio player, and queue a
+    PendingSend so the userbot delivers it as a Telegram voice note.
     """
-    from core.models import PendingSend
+    from core.models import PendingSend, Document
     import uuid
-    from pathlib import Path
-    from django.core.files.base import ContentFile
+    import os
+    from django.conf import settings
 
     user = get_object_or_404(TgUser, pk=user_id)
     if not _consultant_can_access_user(request, user):
@@ -616,10 +617,22 @@ def send_voice_message(request, user_id):
     sender_name = request.session.get('admin_display', 'Admin')
     account_index = user.linked_account or 0
 
-    # Save as .ogg regardless of what the browser sent (userbot will handle conversion if needed)
-    file_ext = '.ogg'
-    filename = f"voice_{uuid.uuid4().hex}{file_ext}"
+    # Determine extension from MIME type
+    mime = (audio_file.content_type or '').lower()
+    file_ext = '.webm' if 'webm' in mime else '.ogg'
+    doc_uid = uuid.uuid4().hex
+    filename = f"admin_voice_{doc_uid}{file_ext}"
 
+    # Save directly to MEDIA_ROOT so file_view can serve it
+    media_root = getattr(settings, 'MEDIA_ROOT', 'uploads')
+    os.makedirs(media_root, exist_ok=True)
+    file_path = os.path.join(media_root, filename)
+    audio_bytes = audio_file.read()
+    with open(file_path, 'wb') as f:
+        f.write(audio_bytes)
+
+    # Queue for Telegram delivery
+    from django.core.files.base import ContentFile
     pending = PendingSend(
         user_tg_id=str(user.telegram_id),
         message='',
@@ -627,17 +640,28 @@ def send_voice_message(request, user_id):
         account_index=account_index,
         send_type=PendingSend.SEND_TYPE_VOICE,
     )
-    pending.voice_file.save(filename, ContentFile(audio_file.read()), save=True)
+    pending.voice_file.save(filename, ContentFile(audio_bytes), save=True)
 
-    # Record in conversation
+    # Create Document record so the chat panel can serve the audio
     active_case = Case.objects.filter(user=user, status='active').first()
+    doc = None
     if active_case:
-        active_case.add_message('admin', f'[Voice message from {sender_name}]', sender_name)
+        doc = Document.objects.create(
+            case=active_case,
+            file_path=filename,
+            display_name=f'voice_{sender_name}.ogg',
+            telegram_file_id=f'local:{filename}',
+            file_unique_id=doc_uid,
+            media_type='voice',
+        )
+        # Store as a proper FILE reference so the renderer shows an audio player
+        active_case.add_message('admin', f'[FILE:{doc_uid}:{filename}:voice]', sender_name)
 
     return JsonResponse({
         'ok': True,
         'timestamp': datetime.now().isoformat(),
         'sender': sender_name,
+        'doc_id': doc.pk if doc else None,
     })
 
 

@@ -661,14 +661,23 @@
                 const resp = await fetch(voiceUrl, { method: 'POST', body: form });
                 const data = await resp.json();
                 if (data.ok) {
-                    // Show a local placeholder bubble
+                    // Show an audio player bubble immediately
                     const chatMsgs = document.getElementById('chatMessages');
                     if (chatMsgs) {
                         const div = document.createElement('div');
                         div.className = 'chat-msg admin';
-                        div.innerHTML = '<div class="msg-bubble">🎤 Voice message sent</div>'
-                            + '<div class="msg-meta">'
-                            + (data.sender || 'Admin') + ' · just now</div>';
+                        let inner = '';
+                        if (data.doc_id) {
+                            const audioSrc = '/admin/files/' + data.doc_id + '/view';
+                            inner = '<div class="msg-bubble msg-voice-bubble">'
+                                + '<audio class="voice-player" controls preload="none" src="' + audioSrc + '">'
+                                + '<a href="' + audioSrc + '?download=1">Download audio</a></audio>'
+                                + '</div>';
+                        } else {
+                            inner = '<div class="msg-bubble">🎤 Voice message sent</div>';
+                        }
+                        inner += '<div class="msg-meta">' + (data.sender || 'Admin') + ' · just now</div>';
+                        div.innerHTML = inner;
                         chatMsgs.appendChild(div);
                         chatMsgs.scrollTop = chatMsgs.scrollHeight;
                     }
