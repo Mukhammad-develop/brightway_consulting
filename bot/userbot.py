@@ -909,45 +909,94 @@ def _register_group_handlers(client, account_index):
 # ============== Queue Processing ==============
 
 async def send_queue_loop(clients: list):
-    """Process pending send queue."""
+    """Process pending send queue (text and voice messages)."""
     from core.models import PendingSend
-    
+
     while True:
         try:
             await asyncio.sleep(3)
-            
+
             for idx, client in enumerate(clients):
                 if not client:
                     continue
-                
-                # Get pending messages for this account
+
                 def get_pending():
                     return list(PendingSend.objects.filter(
                         sent=False,
                         account_index=idx
                     )[:10])
-                
+
                 pending = await run_sync(get_pending)
-                
+
                 for msg in pending:
                     try:
-                        # Send message
-                        await client.send_message(int(msg.user_tg_id), msg.message)
-                        
-                        # Mark as sent
+                        if msg.send_type == PendingSend.SEND_TYPE_VOICE and msg.voice_file:
+                            await _send_voice_pending(client, msg)
+                        else:
+                            await client.send_message(int(msg.user_tg_id), msg.message)
+
                         def mark_sent():
                             msg.sent = True
                             msg.sent_at = datetime.now()
                             msg.save(update_fields=['sent', 'sent_at'])
-                        
+
                         await run_sync(mark_sent)
-                        logger.info(f"Sent pending message to {msg.user_tg_id}")
-                        
+                        logger.info(f"Sent pending {'voice' if msg.send_type == 'voice' else 'text'} to {msg.user_tg_id}")
+
                     except Exception as e:
-                        logger.error(f"Error sending message to {msg.user_tg_id}: {e}")
-        
+                        logger.error(f"Error sending to {msg.user_tg_id}: {e}")
+
         except Exception as e:
             logger.error(f"Error in send queue loop: {e}")
+
+
+async def _send_voice_pending(client: TelegramClient, msg):
+    """Send a voice note stored in PendingSend.voice_file to the Telegram user."""
+    import os
+    import subprocess
+    import tempfile
+    from telethon.tl.types import DocumentAttributeAudio
+
+    voice_path = msg.voice_file.path  # absolute path on disk
+
+    # Convert to OGG/Opus if needed (browsers may record as webm/opus or wav)
+    final_path = voice_path
+    needs_cleanup = False
+    ext = os.path.splitext(voice_path)[1].lower()
+
+    if ext not in ('.ogg', '.oga'):
+        tmp = tempfile.NamedTemporaryFile(suffix='.ogg', delete=False)
+        tmp.close()
+        try:
+            subprocess.run(
+                ['ffmpeg', '-y', '-i', voice_path, '-c:a', 'libopus', '-b:a', '64k', tmp.name],
+                capture_output=True, timeout=30, check=True,
+            )
+            final_path = tmp.name
+            needs_cleanup = True
+        except Exception as e:
+            logger.warning(f"ffmpeg conversion failed for voice, sending as-is: {e}")
+            if os.path.exists(tmp.name):
+                os.unlink(tmp.name)
+
+    try:
+        await client.send_file(
+            int(msg.user_tg_id),
+            file=final_path,
+            voice_note=True,  # marks as voice message in Telegram
+            attributes=[
+                DocumentAttributeAudio(
+                    duration=0,
+                    voice=True,
+                    title=None,
+                    performer=None,
+                    waveform=None,
+                )
+            ],
+        )
+    finally:
+        if needs_cleanup and os.path.exists(final_path):
+            os.unlink(final_path)
 
 
 async def import_queue_loop(clients: list):

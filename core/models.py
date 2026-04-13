@@ -517,12 +517,21 @@ class Reminder(models.Model):
 
 class PendingSend(models.Model):
     """Pending messages to send via userbot."""
-    
+
+    SEND_TYPE_TEXT = 'text'
+    SEND_TYPE_VOICE = 'voice'
+    SEND_TYPE_CHOICES = [
+        (SEND_TYPE_TEXT, 'Text'),
+        (SEND_TYPE_VOICE, 'Voice'),
+    ]
+
     user_tg_id = models.CharField(max_length=50)
-    message = models.TextField()
+    message = models.TextField(blank=True, default='')
     sender_name = models.CharField(max_length=100, default='Admin')
     sent = models.BooleanField(default=False)
     account_index = models.IntegerField(default=0)
+    send_type = models.CharField(max_length=10, choices=SEND_TYPE_CHOICES, default=SEND_TYPE_TEXT)
+    voice_file = models.FileField(upload_to='pending_voice/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     

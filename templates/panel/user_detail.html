@@ -210,7 +210,18 @@
                         {% csrf_token %}
                         <textarea id="chatInput" class="form-input" rows="2" placeholder="Type a message to send via Telegram..."></textarea>
                         <button type="button" class="btn btn-primary" id="chatSendBtn">Send</button>
+                        <button type="button" class="btn btn-outline voice-rec-btn" id="voiceRecBtn" title="Record voice message">
+                            🎤
+                        </button>
                     </form>
+                    <!-- Voice recording UI (hidden until recording starts) -->
+                    <div id="voiceRecUI" style="display:none;align-items:center;gap:0.75rem;padding:0.5rem 0;flex-wrap:wrap;">
+                        <span class="voice-rec-dot" id="voiceRecDot"></span>
+                        <span id="voiceRecTimer" style="font-size:0.9rem;font-weight:600;min-width:2.5rem;">0:00</span>
+                        <span style="font-size:0.85rem;color:var(--text-secondary);">Recording…</span>
+                        <button type="button" class="btn btn-sm btn-danger" id="voiceRecCancel">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="voiceRecSend">Send Voice</button>
+                    </div>
                 </div>
             </div>
             
@@ -398,6 +409,10 @@
 .form-select-sm { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
 .detail-main .panel-card { margin-bottom: 1.5rem; }
 .detail-main .panel-card:last-child { margin-bottom: 0; }
+.voice-rec-btn { padding: 0.45rem 0.7rem; font-size: 1.1rem; line-height: 1; }
+.voice-rec-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: voicePulse 1s infinite; flex-shrink: 0; }
+@keyframes voicePulse { 0%,100% { opacity:1; } 50% { opacity: 0.3; } }
+#voiceRecUI { border-top: 1px solid var(--border-color); margin-top: 0.25rem; padding-top: 0.5rem; }
 </style>
 
 <script>
@@ -532,6 +547,146 @@
             }
         }).catch(function() {});
     }, 5000);
+})();
+</script>
+
+<script>
+// ---- Voice recording ----
+(function () {
+    const voiceUrl = "{% url 'panel:send_voice' user_id=user_obj.pk %}";
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+    const recBtn    = document.getElementById('voiceRecBtn');
+    const recUI     = document.getElementById('voiceRecUI');
+    const cancelBtn = document.getElementById('voiceRecCancel');
+    const sendBtn   = document.getElementById('voiceRecSend');
+    const timerEl   = document.getElementById('voiceRecTimer');
+    const chatSend  = document.getElementById('chatSendForm');
+
+    let mediaRecorder = null;
+    let chunks = [];
+    let timerInterval = null;
+    let seconds = 0;
+
+    function formatTime(s) {
+        return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+
+    function startTimer() {
+        seconds = 0;
+        timerEl.textContent = '0:00';
+        timerInterval = setInterval(function () {
+            seconds++;
+            timerEl.textContent = formatTime(seconds);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+
+    function showRecUI() {
+        chatSend.style.display = 'none';
+        recUI.style.display = 'flex';
+    }
+
+    function hideRecUI() {
+        recUI.style.display = 'none';
+        chatSend.style.display = 'flex';
+    }
+
+    if (!recBtn) return;
+
+    recBtn.addEventListener('click', async function () {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Your browser does not support audio recording.');
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Prefer ogg/opus; fall back to whatever the browser supports
+            const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+                ? 'audio/ogg;codecs=opus'
+                : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : '';
+
+            const opts = mimeType ? { mimeType } : {};
+            mediaRecorder = new MediaRecorder(stream, opts);
+            chunks = [];
+
+            mediaRecorder.ondataavailable = function (e) {
+                if (e.data && e.data.size > 0) chunks.push(e.data);
+            };
+
+            mediaRecorder.start(200);
+            showRecUI();
+            startTimer();
+        } catch (err) {
+            alert('Microphone access denied: ' + err.message);
+        }
+    });
+
+    cancelBtn.addEventListener('click', function () {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+        stopTimer();
+        hideRecUI();
+        chunks = [];
+    });
+
+    sendBtn.addEventListener('click', function () {
+        if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Sending…';
+
+        mediaRecorder.onstop = async function () {
+            mediaRecorder.stream.getTracks().forEach(t => t.stop());
+            stopTimer();
+
+            const mimeType = chunks[0]?.type || 'audio/ogg';
+            const ext = mimeType.includes('webm') ? '.webm' : '.ogg';
+            const blob = new Blob(chunks, { type: mimeType });
+
+            const form = new FormData();
+            form.append('audio', blob, 'voice' + ext);
+            form.append('csrfmiddlewaretoken', csrfToken);
+
+            try {
+                const resp = await fetch(voiceUrl, { method: 'POST', body: form });
+                const data = await resp.json();
+                if (data.ok) {
+                    // Show a local placeholder bubble
+                    const chatMsgs = document.getElementById('chatMessages');
+                    if (chatMsgs) {
+                        const div = document.createElement('div');
+                        div.className = 'chat-msg admin';
+                        div.innerHTML = '<div class="msg-bubble">🎤 Voice message sent</div>'
+                            + '<div class="msg-meta">'
+                            + (data.sender || 'Admin') + ' · just now</div>';
+                        chatMsgs.appendChild(div);
+                        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+                    }
+                } else {
+                    alert('Failed to send voice: ' + (data.error || 'unknown error'));
+                }
+            } catch (e) {
+                alert('Network error: ' + e.message);
+            }
+
+            hideRecUI();
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'Send Voice';
+            chunks = [];
+        };
+
+        mediaRecorder.stop();
+    });
 })();
 </script>
 

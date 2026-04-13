@@ -594,6 +594,54 @@ def send_message(request, user_id):
 
 
 @login_required
+@require_POST
+def send_voice_message(request, user_id):
+    """
+    Accept a recorded audio blob from the admin panel, save it as .ogg,
+    and queue it in PendingSend so the userbot sends it as a Telegram voice note.
+    """
+    from core.models import PendingSend
+    import uuid
+    from pathlib import Path
+    from django.core.files.base import ContentFile
+
+    user = get_object_or_404(TgUser, pk=user_id)
+    if not _consultant_can_access_user(request, user):
+        return JsonResponse({'ok': False, 'error': 'Access denied.'}, status=403)
+
+    audio_file = request.FILES.get('audio')
+    if not audio_file:
+        return JsonResponse({'ok': False, 'error': 'No audio file provided.'})
+
+    sender_name = request.session.get('admin_display', 'Admin')
+    account_index = user.linked_account or 0
+
+    # Save as .ogg regardless of what the browser sent (userbot will handle conversion if needed)
+    file_ext = '.ogg'
+    filename = f"voice_{uuid.uuid4().hex}{file_ext}"
+
+    pending = PendingSend(
+        user_tg_id=str(user.telegram_id),
+        message='',
+        sender_name=sender_name,
+        account_index=account_index,
+        send_type=PendingSend.SEND_TYPE_VOICE,
+    )
+    pending.voice_file.save(filename, ContentFile(audio_file.read()), save=True)
+
+    # Record in conversation
+    active_case = Case.objects.filter(user=user, status='active').first()
+    if active_case:
+        active_case.add_message('admin', f'[Voice message from {sender_name}]', sender_name)
+
+    return JsonResponse({
+        'ok': True,
+        'timestamp': datetime.now().isoformat(),
+        'sender': sender_name,
+    })
+
+
+@login_required
 def poll_messages(request, user_id):
     """
     Poll for new messages since a given timestamp.
