@@ -8,6 +8,11 @@
 {% endblock %}
 
 {% block content %}
+<style>
+.col-name  { max-width: 180px; }
+.col-username { max-width: 140px; }
+.cell-truncate { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
 <div class="list-page">
     <!-- Filters -->
     <div class="filter-bar">
@@ -67,8 +72,8 @@
                     {% for user in page_obj %}
                     <tr>
                         <td><span class="mono">{{ user.telegram_id }}</span></td>
-                        <td>{{ user.first_name|default:"" }} {{ user.last_name|default:"" }}{% if not user.first_name and not user.last_name %}<span class="muted">-</span>{% endif %}</td>
-                        <td>{% if user.username %}<span class="username">@{{ user.username }}</span>{% else %}<span class="muted">-</span>{% endif %}</td>
+                        <td class="col-name">{% with full=user.first_name|add:" "|add:user.last_name %}{% if user.first_name or user.last_name %}<span class="cell-truncate" title="{{ full|striptags }}">{{ full|truncatechars:28 }}</span>{% else %}<span class="muted">-</span>{% endif %}{% endwith %}</td>
+                        <td class="col-username">{% if user.username %}<span class="username cell-truncate" title="@{{ user.username }}">@{{ user.username|truncatechars:22 }}</span>{% else %}<span class="muted">-</span>{% endif %}</td>
                         <td>{{ user.phone|default:"-" }}</td>
                         <td>
                             {% if user.language_code == 'en' %}🇬🇧{% elif user.language_code == 'ru' %}🇷🇺{% elif user.language_code == 'uz' %}🇺🇿{% else %}🌐{% endif %}
