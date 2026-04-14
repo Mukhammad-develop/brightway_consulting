@@ -470,22 +470,31 @@ def build_lang_select() -> str:
         '👋 Welcome to Brightway Consulting!\n'
         '👋 Добро пожаловать в Brightway Consulting!\n'
         "👋 Brightway Consulting'a xush kelibsiz!\n\n"
-        'Please choose your language:\n'
-        'Пожалуйста, выберите язык:\n'
-        'Iltimos, tilingizni tanlang:'
+        'Please choose your language / Выберите язык / Tilingizni tanlang:\n\n'
+        "1. 🇺🇿 O'zbekcha\n"
+        '2. 🇷🇺 Русский язык\n'
+        '3. 🇬🇧 English'
     )
 
 
 _LANG_KEYWORDS: dict[str, list[str]] = {
-    'en': ['english', 'eng', '🇬🇧'],
-    'ru': ['русский', 'russian', 'рус', 'rus', '🇷🇺'],
-    'uz': ["o'zbek", "oʻzbek", 'uzbek', 'uz', 'узбек', '🇺🇿', 'ozbek'],
+    'uz': ["o'zbek", "oʻzbek", 'uzbek', 'uz', 'узбек', '🇺🇿', 'ozbek', '1'],
+    'ru': ['русский', 'russian', 'рус', 'rus', '🇷🇺', '2'],
+    'en': ['english', 'eng', '🇬🇧', '3'],
 }
 
 
 def parse_lang_choice(text: str) -> str | None:
     """Return 'en', 'ru', or 'uz' if the text clearly identifies a language, else None."""
-    lower = text.strip().lower()
+    stripped = text.strip()
+    # Exact number shortcut (1/2/3 map to uz/ru/en)
+    if stripped == '1':
+        return 'uz'
+    if stripped == '2':
+        return 'ru'
+    if stripped == '3':
+        return 'en'
+    lower = stripped.lower()
     for lang, keywords in _LANG_KEYWORDS.items():
         for kw in keywords:
             if kw in lower:

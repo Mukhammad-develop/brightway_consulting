@@ -337,11 +337,11 @@ def _service_buttons(services: list) -> list | None:
 
 
 def _lang_buttons() -> list:
-    """Build Telethon inline buttons for language selection."""
+    """Build Telethon inline buttons for language selection (UZ → RU → EN)."""
     return [
-        [Button.inline('🇬🇧 English', b'simple_lang_en')],
-        [Button.inline('🇷🇺 Русский', b'simple_lang_ru')],
-        [Button.inline("🇺🇿 O'zbekcha", b'simple_lang_uz')],
+        [Button.inline("1. 🇺🇿 O'zbekcha", b'simple_lang_uz')],
+        [Button.inline('2. 🇷🇺 Русский язык', b'simple_lang_ru')],
+        [Button.inline('3. 🇬🇧 English', b'simple_lang_en')],
     ]
 
 
@@ -571,7 +571,7 @@ def register_handlers(client: TelegramClient, account_index: int):
             lang = event.data.decode().split('_')[-1]  # 'en', 'ru', or 'uz'
             uid = event.sender_id
             # Record user's button tap in pending messages
-            label = {'en': '🇬🇧 English', 'ru': '🇷🇺 Русский', 'uz': "🇺🇿 O'zbekcha"}.get(lang, lang)
+            label = {'uz': "1. 🇺🇿 O'zbekcha", 'ru': '2. 🇷🇺 Русский язык', 'en': '3. 🇬🇧 English'}.get(lang, lang)
             pending = get_state(uid).get('pending_msgs', [])
             pending.append(('user', label))
             set_state(uid, pending_msgs=pending)
