@@ -599,11 +599,10 @@ def subject_toggle(request, subject_id):
 def faq_add(request):
     question = (request.POST.get('question') or '').strip()
     answer = (request.POST.get('answer') or '').strip()
-    display_order = int(request.POST.get('display_order') or 0)
     if not question or not answer:
         messages.error(request, 'Both question and answer are required.')
         return redirect('panel:services_list')
-    FaqEntry.objects.create(question=question, answer=answer, display_order=display_order)
+    FaqEntry.objects.create(question=question, answer=answer)
     messages.success(request, 'FAQ entry added.')
     return redirect('panel:services_list')
 
@@ -616,7 +615,6 @@ def faq_edit(request, faq_id):
     if request.method == 'POST':
         entry.question = (request.POST.get('question') or '').strip() or entry.question
         entry.answer = (request.POST.get('answer') or '').strip() or entry.answer
-        entry.display_order = int(request.POST.get('display_order') or 0)
         entry.save()
         messages.success(request, 'FAQ entry updated.')
         return redirect('panel:services_list')

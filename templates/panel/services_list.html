@@ -149,7 +149,7 @@
                         <span class="badge {% if entry.is_active %}badge-success{% else %}badge-secondary{% endif %}"
                               style="font-size:.7rem;">{% if entry.is_active %}Active{% else %}Off{% endif %}</span>
                         <button class="btn btn-xs btn-outline"
-                                onclick="openFaqEdit({{ entry.pk }}, '{{ entry.question|escapejs }}', '{{ entry.answer|escapejs }}', {{ entry.display_order }})">
+                                onclick="openFaqEdit({{ entry.pk }}, '{{ entry.question|escapejs }}', '{{ entry.answer|escapejs }}')">
                             Edit
                         </button>
                         <form method="post" action="{% url 'panel:faq_toggle' entry.pk %}" style="display:inline;" class="faq-toggle-form" data-id="{{ entry.pk }}">
@@ -190,10 +190,6 @@
                     <label>Answer</label>
                     <textarea name="answer" class="form-textarea" rows="4" placeholder="Write the answer in English (or any language). The bot translates it for each user." required></textarea>
                 </div>
-                <div class="form-group" style="max-width:140px;">
-                    <label>Display Order</label>
-                    <input type="number" name="display_order" class="form-input" value="0" min="0">
-                </div>
                 <div style="display:flex;gap:.5rem;margin-top:1rem;">
                     <button type="submit" class="btn btn-primary">Add FAQ</button>
                     <button type="button" class="btn btn-outline" onclick="document.getElementById('faqAddModal').style.display='none'">Cancel</button>
@@ -218,10 +214,6 @@
                 <div class="form-group">
                     <label>Answer</label>
                     <textarea id="faqEditAnswer" name="answer" class="form-textarea" rows="5" required></textarea>
-                </div>
-                <div class="form-group" style="max-width:140px;">
-                    <label>Display Order</label>
-                    <input type="number" id="faqEditOrder" name="display_order" class="form-input" value="0" min="0">
                 </div>
                 <div style="display:flex;gap:.5rem;margin-top:1rem;">
                     <button type="submit" class="btn btn-primary">Save</button>
@@ -441,10 +433,9 @@ function toggleService(serviceId, isActive) {
 }
 
 // ── FAQ modal helpers ──────────────────────────────────────────────────────────
-function openFaqEdit(id, question, answer, order) {
+function openFaqEdit(id, question, answer) {
     document.getElementById('faqEditQuestion').value = question;
     document.getElementById('faqEditAnswer').value = answer;
-    document.getElementById('faqEditOrder').value = order;
     document.getElementById('faqEditForm').action = `/admin/faq/${id}/edit`;
     document.getElementById('faqEditModal').style.display = 'flex';
 }
