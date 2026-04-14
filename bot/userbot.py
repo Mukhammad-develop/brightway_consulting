@@ -140,7 +140,7 @@ def _get_or_create_user(tg_id: int, first_name: str = None, username: str = None
         defaults={
             'first_name': first_name,
             'username': username,
-            'language_code': 'en'
+            'language_code': '',
         }
     )
     return user, created
@@ -1270,7 +1270,7 @@ async def fetch_and_save_chat(client: TelegramClient, user_tg_id: str, limit: in
 
             user, _ = TgUser.objects.get_or_create(
                 telegram_id=tg_id,
-                defaults={'language_code': 'en'}
+                defaults={'language_code': ''}
             )
             # Re-import: replace conversation on existing active case
             existing = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
@@ -1413,7 +1413,7 @@ async def import_chat(client: TelegramClient, user_tg_id: str, limit: int = 100)
             
             user, _ = TgUser.objects.get_or_create(
                 telegram_id=tg_id,
-                defaults={'language_code': 'en'}
+                defaults={'language_code': ''}
             )
             existing = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
             if existing:
