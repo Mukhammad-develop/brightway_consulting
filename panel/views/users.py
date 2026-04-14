@@ -68,6 +68,13 @@ def users_list(request):
     language_filter = request.GET.get('language', '').strip()
     if language_filter:
         users = users.filter(language_code__iexact=language_filter)
+
+    # Filter by AI status (on/off based on active case)
+    ai_filter = request.GET.get('ai', '').strip()
+    if ai_filter == 'on':
+        users = users.filter(cases__status='active', cases__ai_enabled=True).distinct()
+    elif ai_filter == 'off':
+        users = users.filter(cases__status='active', cases__ai_enabled=False).distinct()
     
     # Sorting
     sort_by = request.GET.get('sort', '-created_at')
@@ -102,6 +109,7 @@ def users_list(request):
         'page_obj': page_obj,
         'search_query': search_query,
         'language_filter': language_filter,
+        'ai_filter': ai_filter,
         'sort_by': sort_by,
         'languages': languages,
         'total_count': paginator.count,

@@ -31,6 +31,13 @@
                 </select>
             </div>
             <div class="filter-group">
+                <select name="ai" class="form-select">
+                    <option value="">All AI Status</option>
+                    <option value="on" {% if ai_filter == 'on' %}selected{% endif %}>🤖 AI On</option>
+                    <option value="off" {% if ai_filter == 'off' %}selected{% endif %}>🔕 AI Off</option>
+                </select>
+            </div>
+            <div class="filter-group">
                 <select name="sort" class="form-select">
                     <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Newest First</option>
                     <option value="created_at" {% if sort_by == 'created_at' %}selected{% endif %}>Oldest First</option>
@@ -39,7 +46,7 @@
                 </select>
             </div>
             <button type="submit" class="btn btn-outline">Filter</button>
-            {% if search_query or language_filter %}
+            {% if search_query or language_filter or ai_filter %}
             <a href="{% url 'panel:users_list' %}" class="btn btn-text">Clear</a>
             {% endif %}
         </form>
@@ -102,13 +109,13 @@
     {% if page_obj.has_other_pages %}
     <div class="pagination">
         {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&language={{ language_filter }}&sort={{ sort_by }}" class="btn btn-sm btn-outline">&laquo; Previous</a>
+        <a href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&language={{ language_filter }}&ai={{ ai_filter }}&sort={{ sort_by }}" class="btn btn-sm btn-outline">&laquo; Previous</a>
         {% endif %}
         
         <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
         
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&language={{ language_filter }}&sort={{ sort_by }}" class="btn btn-sm btn-outline">Next &raquo;</a>
+        <a href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&language={{ language_filter }}&ai={{ ai_filter }}&sort={{ sort_by }}" class="btn btn-sm btn-outline">Next &raquo;</a>
         {% endif %}
     </div>
     {% endif %}

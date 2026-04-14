@@ -3,7 +3,7 @@ URL configuration for admin panel.
 """
 
 from django.urls import path
-from .views import auth, dashboard, users, cases, files, services, reports, notifications, team, import_chat, groups
+from .views import auth, dashboard, users, cases, files, services, reports, notifications, team, import_chat, groups, developer
 
 app_name = 'panel'
 
@@ -106,6 +106,9 @@ urlpatterns = [
     path('admin/group-chats/<int:group_id>/delete', groups.group_chat_delete, name='group_chat_delete'),
     path('admin/group-chats/<int:group_id>/toggle', groups.group_chat_toggle, name='group_chat_toggle'),
     path('admin/group-chats/<int:group_id>/clear-cooldowns', groups.group_chat_clear_cooldowns, name='group_chat_clear_cooldowns'),
+
+    # Developer page (master only)
+    path('admin/developer', developer.developer_view, name='developer'),
 
     # Import Chat (elevated users only)
     path('admin/import-chat', import_chat.import_chat_list, name='import_chat'),

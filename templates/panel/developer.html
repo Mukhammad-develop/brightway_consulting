@@ -1,0 +1,173 @@
+{% extends 'panel/base.html' %}
+
+{% block page_title %}Developer{% endblock %}
+{% block page_title_header %}Developer — Bot Conversations{% endblock %}
+
+{% block content %}
+<style>
+.dev-filters { margin-bottom: 1.5rem; }
+.dev-stats { color: var(--text-muted); font-size: .875rem; margin-bottom: 1rem; }
+
+/* Case cards */
+.dev-case-card { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 1.5rem; overflow: hidden; }
+.dev-case-header { display: flex; align-items: center; gap: .75rem; padding: .85rem 1.1rem; background: var(--surface-2); cursor: pointer; user-select: none; }
+.dev-case-header:hover { background: var(--surface-3); }
+.dev-case-title { font-weight: 600; flex: 1; font-size: .95rem; }
+.dev-case-meta { font-size: .78rem; color: var(--text-muted); display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+.badge-ai-on  { background: #22c55e22; color: #16a34a; border: 1px solid #22c55e55; padding: 1px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
+.badge-ai-off { background: #ef444422; color: #b91c1c; border: 1px solid #ef444455; padding: 1px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
+.badge-service { background: var(--primary-muted,#3b82f620); color: var(--primary,#3b82f6); border: 1px solid var(--primary-border,#3b82f640); padding: 1px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
+.dev-toggle-icon { font-size: .9rem; transition: transform .2s; }
+.dev-toggle-icon.open { transform: rotate(90deg); }
+
+.dev-chat-wrap { display: none; padding: 1rem 1.1rem; border-top: 1px solid var(--border); max-height: 600px; overflow-y: auto; background: var(--surface); }
+.dev-chat-wrap.visible { display: block; }
+
+/* Reuse chat bubble styles from user_detail */
+.chat-msg { display: flex; flex-direction: column; margin-bottom: .6rem; }
+.chat-msg.user  { align-items: flex-start; }
+.chat-msg.assistant { align-items: flex-end; }
+.chat-msg.system { align-items: center; }
+.msg-bubble { max-width: 75%; padding: .55rem .8rem; border-radius: 14px; font-size: .875rem; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+.chat-msg.user .msg-bubble { background: var(--surface-2); border-bottom-left-radius: 4px; }
+.chat-msg.assistant .msg-bubble { background: var(--primary, #3b82f6); color: #fff; border-bottom-right-radius: 4px; }
+.chat-msg.system .msg-bubble { background: var(--surface-3); color: var(--text-muted); font-size: .78rem; font-style: italic; }
+.msg-meta { font-size: .7rem; color: var(--text-muted); margin-top: 2px; padding: 0 2px; }
+.voice-player { display: block; height: 36px; min-width: 200px; max-width: 100%; border-radius: 20px; }
+.chat-inline-photo { max-width: 220px; max-height: 220px; border-radius: 10px; display: block; }
+.msg-voice-bubble, .msg-file-bubble { max-width: 75%; padding: .5rem; background: var(--surface-2); border-radius: 14px; }
+.chat-msg.assistant .msg-voice-bubble, .chat-msg.assistant .msg-file-bubble { background: var(--primary-dark, #2563eb); }
+.voice-transcript { font-size: .78rem; color: inherit; opacity: .75; margin-top: 4px; }
+
+.dev-empty { color: var(--text-muted); font-size: .875rem; font-style: italic; padding: .5rem 0; }
+.dev-case-link { font-size: .78rem; }
+</style>
+
+<div class="list-page">
+    <!-- Filters -->
+    <div class="filter-bar dev-filters">
+        <form method="get" class="filter-form">
+            <div class="filter-group">
+                <input type="text" name="search" value="{{ search_query }}" placeholder="Search by name / username / Telegram ID…" class="form-input search-input">
+            </div>
+            <div class="filter-group">
+                <select name="ai" class="form-select">
+                    <option value="">All AI Status</option>
+                    <option value="on"  {% if ai_filter == 'on'  %}selected{% endif %}>🤖 AI On</option>
+                    <option value="off" {% if ai_filter == 'off' %}selected{% endif %}>🔕 AI Off</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <select name="service" class="form-select">
+                    <option value="">All Services</option>
+                    {% for svc in services %}
+                    <option value="{{ svc }}" {% if service_filter == svc %}selected{% endif %}>{{ svc }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-outline">Filter</button>
+            {% if search_query or ai_filter or service_filter %}
+            <a href="{% url 'panel:developer' %}" class="btn btn-text">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="dev-stats">Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ total_count }} case(s)</div>
+
+    {% for item in cases_data %}
+    {% with case=item.case %}
+    <div class="dev-case-card">
+        <div class="dev-case-header" onclick="toggleChat('chat-{{ case.pk }}', this)">
+            <span class="dev-toggle-icon" id="icon-{{ case.pk }}">▶</span>
+            <div class="dev-case-title">
+                Case #{{ case.pk }} —
+                {% if case.user %}
+                    <a href="{% url 'panel:user_detail' case.user.pk %}" onclick="event.stopPropagation()">
+                        {{ case.user.first_name|default:'' }} {{ case.user.last_name|default:'' }}
+                        {% if case.user.username %}(@{{ case.user.username }}){% endif %}
+                    </a>
+                {% else %}Unknown user{% endif %}
+            </div>
+            <div class="dev-case-meta">
+                {% if case.ai_enabled %}<span class="badge-ai-on">AI On</span>{% else %}<span class="badge-ai-off">AI Off</span>{% endif %}
+                {% if case.service %}<span class="badge-service">{{ case.service }}</span>{% endif %}
+                <span>{{ item.msg_count }} msg{{ item.msg_count|pluralize }}</span>
+                {% if case.assigned_to %}<span>Assigned: {{ case.assigned_to.username }}</span>{% endif %}
+                <span>{{ case.updated_at|date:"d M Y H:i" }}</span>
+            </div>
+        </div>
+        <div class="dev-chat-wrap" id="chat-{{ case.pk }}">
+            {% if item.messages %}
+                {% for msg in item.messages %}
+                <div class="chat-msg {{ msg.role }}">
+                    {% if msg.file_info %}
+                        {% if msg.file_media_type == 'voice' %}
+                        <div class="msg-voice-bubble">
+                            <audio class="voice-player" controls preload="none"
+                                   src="{% url 'panel:file_view' msg.file_info.id %}">
+                                <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1">Download</a>
+                            </audio>
+                            {% if msg.voice_transcription %}
+                            <div class="voice-transcript">{{ msg.voice_transcription }}</div>
+                            {% endif %}
+                        </div>
+                        {% elif msg.file_media_type == 'photo' %}
+                        <div class="msg-file-bubble">
+                            <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="photo">
+                        </div>
+                        {% else %}
+                        <div class="msg-file-bubble">
+                            📄 {{ msg.file_filename|default:"File" }}
+                            <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline" style="margin-left:.5rem">Download</a>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                    <div class="msg-bubble">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
+                    {% endif %}
+                    <div class="msg-meta">
+                        {{ msg.role|title }}
+                        {% if msg.timestamp %} · {{ msg.timestamp|slice:":16" }}{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="dev-empty">No messages recorded yet.</p>
+            {% endif %}
+            <div style="margin-top:.75rem; text-align:right;">
+                <a href="{% url 'panel:user_detail' case.user.pk %}" class="btn btn-sm btn-outline dev-case-link">Open full chat →</a>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+    {% empty %}
+    <div class="empty-state">
+        <p>No cases found matching your filters.</p>
+    </div>
+    {% endfor %}
+
+    {% if page_obj.has_other_pages %}
+    <div class="pagination">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&ai={{ ai_filter }}&service={{ service_filter }}" class="btn btn-sm btn-outline">&laquo; Previous</a>
+        {% endif %}
+        <span class="page-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&ai={{ ai_filter }}&service={{ service_filter }}" class="btn btn-sm btn-outline">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleChat(id, header) {
+    const el = document.getElementById(id);
+    const icon = header.querySelector('.dev-toggle-icon');
+    const visible = el.classList.toggle('visible');
+    icon.classList.toggle('open', visible);
+    if (visible) {
+        // scroll to bottom of the chat
+        el.scrollTop = el.scrollHeight;
+    }
+}
+</script>
+{% endblock %}

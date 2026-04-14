@@ -364,7 +364,10 @@ async def _ub_handle_subject_selected(client: TelegramClient, chat_id: int,
     text = build_service_list(lang, subject, services)
     buttons = _service_buttons(services)
     await client.send_message(chat_id, text, buttons=buttons or None)
-    set_state(uid, step=STEP_SERVICE, subject_id=subject_id)
+    # Buffer service list so it appears in admin panel once the case is created
+    pending = get_state(uid).get('pending_msgs', [])
+    pending.append(('assistant', text))
+    set_state(uid, step=STEP_SERVICE, subject_id=subject_id, pending_msgs=pending)
 
 
 async def _ub_handle_service_selected(client: TelegramClient, chat_id: int,
@@ -619,11 +622,12 @@ def register_handlers(client: TelegramClient, account_index: int):
                     return
 
                 if step in (STEP_INIT, ''):
-                    # Buffer user's opening message so it can be saved once a case exists
+                    # Buffer user's opening message AND bot greeting so full conversation is saved
                     pending = state.get('pending_msgs', [])
                     pending.append(('user', text))
                     subjects = await run_sync(get_active_subjects)
                     msg = build_greeting(lang, subjects)
+                    pending.append(('assistant', msg))
                     buttons = _subject_buttons(subjects)
                     await event.respond(msg, buttons=buttons or None)
                     set_state(uid, step=STEP_SUBJECT, lang=lang, pending_msgs=pending)
@@ -729,7 +733,17 @@ def register_handlers(client: TelegramClient, account_index: int):
                 msg = build_greeting(lang, subjects) if lang else build_greeting_universal(subjects)
                 buttons = _subject_buttons(subjects)
                 await event.respond(msg, buttons=buttons or None)
-                set_state(uid, step=STEP_SUBJECT, lang=lang_for_state)
+                # Buffer the sticker/media label + bot greeting so they flush into the case later
+                if getattr(event, 'sticker', None):
+                    media_label = '[Sticker]'
+                elif getattr(event, 'photo', None):
+                    media_label = '[Photo]'
+                else:
+                    media_label = '[Media]'
+                pending = state.get('pending_msgs', [])
+                pending.append(('user', media_label))
+                pending.append(('assistant', msg))
+                set_state(uid, step=STEP_SUBJECT, lang=lang_for_state, pending_msgs=pending)
                 return
 
             case_id = state.get('case_id')

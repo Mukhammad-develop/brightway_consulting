@@ -14,3 +14,4 @@ from . import notifications
 from . import team
 from . import import_chat
 from . import groups
+from . import developer

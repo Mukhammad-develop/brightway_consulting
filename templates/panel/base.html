@@ -133,6 +133,16 @@
                         <span>Import Chat</span>
                     </a>
                     {% endif %}
+
+                    {% if is_master %}
+                    <a href="{% url 'panel:developer' %}" class="nav-item {% if request.resolver_match.url_name == 'developer' %}active{% endif %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"/>
+                            <polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                        <span>Developer</span>
+                    </a>
+                    {% endif %}
                     
                     <span class="nav-separator"></span>
                     
