@@ -50,7 +50,7 @@ from .simple_flow import (
     db_flush_pending_messages, db_finalise_case, db_save_user_language,
     detect_lang, ai_match_subject, ai_match_service,
     is_done_message, wants_consultant, is_confirm_yes, is_confirm_no,
-    build_lang_select, parse_lang_choice,
+    build_lang_select, parse_lang_choice, build_bot_intro,
     build_greeting, build_greeting_universal, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
     build_consultant_confirm, build_consultant_declined,
@@ -370,15 +370,24 @@ async def _ub_show_lang_select(chat_id: int, uid: int, event, user_text: str = N
 
 async def _ub_handle_lang_selected(client: TelegramClient, chat_id: int,
                                     uid: int, tg_id: int, lang: str) -> None:
-    """Persist the chosen language and show the category list."""
+    """Persist the chosen language, send bot intro, then show the category list."""
     set_state(uid, lang=lang)
     await run_sync(lambda: db_save_user_language(tg_id, lang))
+
+    # 1 — Dedicated bot self-introduction
+    intro_msg = build_bot_intro(lang)
+    await client.send_message(chat_id, intro_msg)
+
+    # 2 — Category list with buttons
     subjects = await run_sync(get_active_subjects)
-    msg = build_greeting(lang, subjects)
+    greeting_msg = build_greeting(lang, subjects)
     buttons = _subject_buttons(subjects)
-    await client.send_message(chat_id, msg, buttons=buttons or None)
+    await client.send_message(chat_id, greeting_msg, buttons=buttons or None)
+
+    # Buffer both into pending so they appear in admin panel conversation
     pending = get_state(uid).get('pending_msgs', [])
-    pending.append(('assistant', msg))
+    pending.append(('assistant', intro_msg))
+    pending.append(('assistant', greeting_msg))
     set_state(uid, step=STEP_SUBJECT, pending_msgs=pending)
 
 

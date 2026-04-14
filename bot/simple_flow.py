@@ -493,24 +493,52 @@ def parse_lang_choice(text: str) -> str | None:
     return None
 
 
-def build_greeting(lang: str, subjects: list) -> str:
-    intro = {
+def build_bot_intro(lang: str) -> str:
+    """
+    Dedicated bot self-introduction sent immediately after language selection,
+    before showing service categories.
+    """
+    return {
         'en': (
-            '👋 Hello! Welcome to Brightway Consulting.\n\n'
-            'I am an AI assistant. I will collect your details and pass them to our consultant, who will then assist you directly.\n\n'
-            'What service do you need help with?\nPlease choose a category:'
+            '🤖 I am an AI assistant for Brightway Consulting.\n\n'
+            'Here is how this works:\n'
+            '1️⃣ I will ask you a few questions and collect the necessary information.\n'
+            '2️⃣ Once I have everything, I will pass your request to one of our human consultants.\n'
+            '3️⃣ The consultant will review your case and get back to you directly — usually within a short time.\n\n'
+            'I cannot give legal or professional advice myself, but our consultants can. '
+            "Let's get started! 👇"
         ),
         'ru': (
-            '👋 Здравствуйте! Добро пожаловать в Brightway Consulting.\n\n'
-            'Я — ИИ-помощник. Я собираю ваши данные и передаю их консультанту, который свяжется с вами напрямую.\n\n'
-            'По какой теме вам нужна помощь?\nПожалуйста, выберите категорию:'
+            '🤖 Я — ИИ-помощник Brightway Consulting.\n\n'
+            'Как это работает:\n'
+            '1️⃣ Я задам вам несколько вопросов и соберу необходимую информацию.\n'
+            '2️⃣ Как только у меня будет всё необходимое, я передам вашу заявку живому консультанту.\n'
+            '3️⃣ Консультант изучит ваше обращение и свяжется с вами напрямую — обычно в короткие сроки.\n\n'
+            'Сам я не даю юридических или профессиональных советов, но наши консультанты могут. '
+            'Начнём! 👇'
         ),
         'uz': (
-            '👋 Salom! Brightway Consulting ga xush kelibsiz.\n\n'
-            "Men sun'iy intellekt yordamchisiman. Sizning ma'lumotlaringizni to'plab, konsultantga yetkazaman — u siz bilan to'g'ridan-to'g'ri bog'lanadi.\n\n"
-            "Qaysi xizmat bo'yicha yordam kerak?\nIltimos, bir toifani tanlang:"
+            "🤖 Men Brightway Consulting'ning AI yordamchisiman.\n\n"
+            "Qanday ishlaydi:\n"
+            "1️⃣ Men sizdan bir necha savol so'rayman va kerakli ma'lumotlarni yig'aman.\n"
+            "2️⃣ Hamma narsa tayyor bo'lgach, arizangizni jonli konsultantga yuboraman.\n"
+            "3️⃣ Konsultant sizning murojatingizni ko'rib chiqadi va to'g'ridan-to'g'ri siz bilan bog'lanadi — odatda qisqa muddatda.\n\n"
+            "Men o'zim yuridik yoki kasbiy maslahat bera olmayman, lekin bizning konsultantlarimiz berishi mumkin. "
+            "Boshlaylik! 👇"
         ),
-    }.get(lang, '')
+    }.get(lang, (
+        '🤖 I am an AI assistant. I will collect your information and pass it to a consultant, '
+        'who will get back to you shortly. 👇'
+    ))
+
+
+def build_greeting(lang: str, subjects: list) -> str:
+    """Category list — sent as a second message after build_bot_intro."""
+    intro = {
+        'en': 'What service do you need help with?\nPlease choose a category:',
+        'ru': 'По какой теме вам нужна помощь?\nПожалуйста, выберите категорию:',
+        'uz': "Qaysi xizmat bo'yicha yordam kerak?\nIltimos, bir toifani tanlang:",
+    }.get(lang, 'Please choose a category:')
     lines = [f'{i}. {s.icon_emoji} {s.get_name(lang)}' for i, s in enumerate(subjects, 1)]
     return intro + ('\n\n' + '\n'.join(lines) if lines else '')
 
