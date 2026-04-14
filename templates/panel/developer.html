@@ -10,9 +10,9 @@
 
 /* Case cards */
 .dev-case-card { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 1.5rem; overflow: hidden; }
-.dev-case-header { display: flex; align-items: center; gap: .75rem; padding: .85rem 1.1rem; background: var(--surface-2); cursor: pointer; user-select: none; }
+.dev-case-header { display: flex; align-items: center; gap: .75rem; padding: .85rem 1.1rem; background: var(--surface-2); cursor: pointer; user-select: none; min-width: 0; overflow: hidden; }
 .dev-case-header:hover { background: var(--surface-3); }
-.dev-case-title { font-weight: 600; flex: 1; font-size: .95rem; }
+.dev-case-title { font-weight: 600; flex: 1; font-size: .95rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dev-case-meta { font-size: .78rem; color: var(--text-muted); display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
 .badge-ai-on  { background: #22c55e22; color: #16a34a; border: 1px solid #22c55e55; padding: 1px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
 .badge-ai-off { background: #ef444422; color: #b91c1c; border: 1px solid #ef444455; padding: 1px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
@@ -79,12 +79,12 @@
     <div class="dev-case-card">
         <div class="dev-case-header" onclick="toggleChat('chat-{{ case.pk }}', this)">
             <span class="dev-toggle-icon" id="icon-{{ case.pk }}">▶</span>
-            <div class="dev-case-title">
+            <div class="dev-case-title" title="Case #{{ case.pk }}{% if case.user %} — {{ case.user.first_name|default:'' }} {{ case.user.last_name|default:'' }}{% if case.user.username %} (@{{ case.user.username }}){% endif %}{% endif %}">
                 Case #{{ case.pk }} —
                 {% if case.user %}
                     <a href="{% url 'panel:user_detail' case.user.pk %}" onclick="event.stopPropagation()">
-                        {{ case.user.first_name|default:'' }} {{ case.user.last_name|default:'' }}
-                        {% if case.user.username %}(@{{ case.user.username }}){% endif %}
+                        {{ case.user.first_name|default:''|truncatechars:20 }} {{ case.user.last_name|default:''|truncatechars:15 }}
+                        {% if case.user.username %}(@{{ case.user.username|truncatechars:18 }}){% endif %}
                     </a>
                 {% else %}Unknown user{% endif %}
             </div>
