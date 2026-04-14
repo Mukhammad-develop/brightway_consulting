@@ -17,7 +17,7 @@ class TgUser(models.Model):
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
     phone = models.CharField(max_length=20, null=True, blank=True)
-    language_code = models.CharField(max_length=10, default='en', db_column='language')
+    language_code = models.CharField(max_length=10, default='', blank=True, db_column='language')
     is_bot = models.BooleanField(default=False)
     profile_data = models.TextField(default='{}')  # JSON field
     profile_photo_path = models.CharField(max_length=500, null=True, blank=True)  # relative path under uploads/profiles/

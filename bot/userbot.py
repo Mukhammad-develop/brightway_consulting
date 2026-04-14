@@ -43,13 +43,14 @@ from .services import (
     READY_FOR_CONSULTANT_MARKER,
 )
 from .simple_flow import (
-    STEP_INIT, STEP_SUBJECT, STEP_SERVICE, STEP_COLLECTING, STEP_CONFIRM_CONSULTANT, STEP_DONE,
+    STEP_INIT, STEP_LANG, STEP_SUBJECT, STEP_SERVICE, STEP_COLLECTING, STEP_CONFIRM_CONSULTANT, STEP_DONE,
     get_state, set_state, clear_state,
     get_active_subjects, get_services_for_subject,
     db_get_or_create_user, db_get_or_open_case, db_link_case_to_service,
-    db_flush_pending_messages, db_finalise_case,
+    db_flush_pending_messages, db_finalise_case, db_save_user_language,
     detect_lang, ai_match_subject, ai_match_service,
     is_done_message, wants_consultant, is_confirm_yes, is_confirm_no,
+    build_lang_select, parse_lang_choice,
     build_greeting, build_greeting_universal, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
     build_consultant_confirm, build_consultant_declined,
@@ -335,6 +336,15 @@ def _service_buttons(services: list) -> list | None:
             for svc in services]
 
 
+def _lang_buttons() -> list:
+    """Build Telethon inline buttons for language selection."""
+    return [
+        [Button.inline('🇬🇧 English', b'simple_lang_en')],
+        [Button.inline('🇷🇺 Русский', b'simple_lang_ru')],
+        [Button.inline("🇺🇿 O'zbekcha", b'simple_lang_uz')],
+    ]
+
+
 async def _typing_loop_ub(client: TelegramClient, chat_id: int):
     """Continuously send typing action until cancelled."""
     try:
@@ -345,6 +355,31 @@ async def _typing_loop_ub(client: TelegramClient, chat_id: int):
             await asyncio.sleep(4)
     except asyncio.CancelledError:
         pass
+
+
+async def _ub_show_lang_select(chat_id: int, uid: int, event, user_text: str = None) -> None:
+    """Send the language-selection message and move state to STEP_LANG."""
+    msg = build_lang_select()
+    pending = get_state(uid).get('pending_msgs', [])
+    if user_text:
+        pending.append(('user', user_text))
+    pending.append(('assistant', msg))
+    await event.respond(msg, buttons=_lang_buttons())
+    set_state(uid, step=STEP_LANG, pending_msgs=pending)
+
+
+async def _ub_handle_lang_selected(client: TelegramClient, chat_id: int,
+                                    uid: int, tg_id: int, lang: str) -> None:
+    """Persist the chosen language and show the category list."""
+    set_state(uid, lang=lang)
+    await run_sync(lambda: db_save_user_language(tg_id, lang))
+    subjects = await run_sync(get_active_subjects)
+    msg = build_greeting(lang, subjects)
+    buttons = _subject_buttons(subjects)
+    await client.send_message(chat_id, msg, buttons=buttons or None)
+    pending = get_state(uid).get('pending_msgs', [])
+    pending.append(('assistant', msg))
+    set_state(uid, step=STEP_SUBJECT, pending_msgs=pending)
 
 
 async def _ub_handle_subject_selected(client: TelegramClient, chat_id: int,
@@ -466,13 +501,9 @@ def register_handlers(client: TelegramClient, account_index: int):
             await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
             clear_state(uid)
-            subjects = await run_sync(get_active_subjects)
-            lang_fallback = 'en'
-            lang = lang_fallback
-            text = build_greeting(lang, subjects)
-            buttons = _subject_buttons(subjects)
-            await event.respond(text, buttons=buttons or None)
-            set_state(uid, step=STEP_SUBJECT, lang=lang)
+            msg = build_lang_select()
+            await event.respond(msg, buttons=_lang_buttons())
+            set_state(uid, step=STEP_LANG, pending_msgs=[('user', '/start'), ('assistant', msg)])
             logger.info(f"[Account {account_index}] /start (simple) from {sender.id}")
         except Exception as e:
             logger.error(f"Error in /start handler: {e}")
@@ -518,7 +549,24 @@ def register_handlers(client: TelegramClient, account_index: int):
         except Exception as e:
             logger.error(f"cb_service error: {e}")
 
-    # ── Language callback (kept for compatibility) ─────────────────────────────
+    # ── Language selection callback (simple flow) ──────────────────────────────
+
+    @client.on(events.CallbackQuery(pattern=b'simple_lang_'))
+    async def cb_lang(event):
+        try:
+            lang = event.data.decode().split('_')[-1]  # 'en', 'ru', or 'uz'
+            uid = event.sender_id
+            # Record user's button tap in pending messages
+            label = {'en': '🇬🇧 English', 'ru': '🇷🇺 Русский', 'uz': "🇺🇿 O'zbekcha"}.get(lang, lang)
+            pending = get_state(uid).get('pending_msgs', [])
+            pending.append(('user', label))
+            set_state(uid, pending_msgs=pending)
+            await event.answer()
+            await _ub_handle_lang_selected(client, event.chat_id, uid, uid, lang)
+        except Exception as e:
+            logger.error(f"cb_lang error: {e}")
+
+    # ── Legacy language callback (kept for old inline keyboards still in chats) ─
 
     @client.on(events.CallbackQuery(pattern=b'lang_'))
     async def handle_language_callback(event):
@@ -589,17 +637,21 @@ def register_handlers(client: TelegramClient, account_index: int):
 
             typing_task = asyncio.create_task(_typing_loop_ub(client, event.chat_id))
             try:
-                # Only re-detect language on meaningful text; skip short/numeric
-                # inputs (e.g. "1", "2") to avoid overwriting the stored language.
-                stored_lang = state.get('lang', 'en')
-                if len(text) > 3 and not text.isdigit():
-                    lang = await run_sync(lambda: detect_lang(text, stored_lang))
-                    set_state(uid, lang=lang)
+                # During lang-selection step, language isn't known yet — skip auto-detect.
+                # For all other steps, only re-detect on meaningful non-numeric text to
+                # avoid overwriting the stored language with a wrong guess.
+                stored_lang = state.get('lang') or 'en'
+                if step not in (STEP_INIT, '', STEP_LANG):
+                    if len(text) > 3 and not text.isdigit():
+                        lang = await run_sync(lambda: detect_lang(text, stored_lang))
+                        set_state(uid, lang=lang)
+                    else:
+                        lang = stored_lang
                 else:
                     lang = stored_lang
 
-                # ── Consultant connect request (any active step) ───────────────
-                if step not in (STEP_DONE, STEP_CONFIRM_CONSULTANT):
+                # ── Consultant connect request (any active step except early ones) ──
+                if step not in (STEP_DONE, STEP_CONFIRM_CONSULTANT, STEP_INIT, '', STEP_LANG):
                     if await run_sync(lambda: wants_consultant(text, lang)):
                         set_state(uid, step=STEP_CONFIRM_CONSULTANT, prev_step=step)
                         await event.respond(build_consultant_confirm(lang))
@@ -622,15 +674,32 @@ def register_handlers(client: TelegramClient, account_index: int):
                     return
 
                 if step in (STEP_INIT, ''):
-                    # Buffer user's opening message AND bot greeting so full conversation is saved
-                    pending = state.get('pending_msgs', [])
-                    pending.append(('user', text))
-                    subjects = await run_sync(get_active_subjects)
-                    msg = build_greeting(lang, subjects)
-                    pending.append(('assistant', msg))
-                    buttons = _subject_buttons(subjects)
-                    await event.respond(msg, buttons=buttons or None)
-                    set_state(uid, step=STEP_SUBJECT, lang=lang, pending_msgs=pending)
+                    # First-ever message: show language selection (or skip if lang already in DB)
+                    db_lang = getattr(user, 'language_code', '') or ''
+                    if db_lang in ('en', 'ru', 'uz'):
+                        # Returning user — use their saved language, go straight to categories
+                        pending = state.get('pending_msgs', [])
+                        pending.append(('user', text))
+                        subjects = await run_sync(get_active_subjects)
+                        msg = build_greeting(db_lang, subjects)
+                        pending.append(('assistant', msg))
+                        await event.respond(msg, buttons=_subject_buttons(subjects) or None)
+                        set_state(uid, step=STEP_SUBJECT, lang=db_lang, pending_msgs=pending)
+                    else:
+                        # New user — ask language first
+                        await _ub_show_lang_select(event.chat_id, uid, event, user_text=text)
+
+                elif step == STEP_LANG:
+                    # User typed/sent something during language selection
+                    chosen = parse_lang_choice(text)
+                    if chosen:
+                        pending = get_state(uid).get('pending_msgs', [])
+                        pending.append(('user', text))
+                        set_state(uid, pending_msgs=pending)
+                        await _ub_handle_lang_selected(client, event.chat_id, uid, sender.id, chosen)
+                    else:
+                        # Can't detect language — re-prompt
+                        await event.respond(build_lang_select(), buttons=_lang_buttons())
 
                 elif step == STEP_SUBJECT:
                     # Buffer this message too (user may type their subject name)
@@ -715,7 +784,7 @@ def register_handlers(client: TelegramClient, account_index: int):
                 except Exception as hist_err:
                     logger.debug('History detection error (media) for %s: %s', sender.id, hist_err)
 
-            await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
+            user, _ = await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
 
             # ── AI-disabled check ─────────────────────────────────────────────
@@ -725,34 +794,54 @@ def register_handlers(client: TelegramClient, account_index: int):
 
             state = get_state(uid)
             step = state.get('step', STEP_INIT)
-            lang = _lang_from_sender(sender, state)
-            lang_for_state = lang or 'en'
 
-            if step != STEP_COLLECTING:
-                subjects = await run_sync(get_active_subjects)
-                msg = build_greeting(lang, subjects) if lang else build_greeting_universal(subjects)
-                buttons = _subject_buttons(subjects)
-                await event.respond(msg, buttons=buttons or None)
-                # Buffer the sticker/media label + bot greeting so they flush into the case later
-                if getattr(event, 'sticker', None):
-                    media_label = '[Sticker]'
-                elif getattr(event, 'photo', None):
-                    media_label = '[Photo]'
+            # Determine media label for pending messages
+            if getattr(event, 'sticker', None):
+                media_label = '[Sticker]'
+            elif getattr(event, 'photo', None):
+                media_label = '[Photo]'
+            else:
+                media_label = '[Media]'
+
+            if step not in (STEP_COLLECTING, STEP_LANG):
+                # Not yet in a case — show language selection (or categories for returning users)
+                db_lang = getattr(user, 'language_code', '') or ''
+                if db_lang in ('en', 'ru', 'uz'):
+                    lang = db_lang
+                    subjects = await run_sync(get_active_subjects)
+                    msg = build_greeting(lang, subjects)
+                    pending = state.get('pending_msgs', [])
+                    pending.append(('user', media_label))
+                    pending.append(('assistant', msg))
+                    await event.respond(msg, buttons=_subject_buttons(subjects) or None)
+                    set_state(uid, step=STEP_SUBJECT, lang=lang, pending_msgs=pending)
                 else:
-                    media_label = '[Media]'
-                pending = state.get('pending_msgs', [])
-                pending.append(('user', media_label))
-                pending.append(('assistant', msg))
-                set_state(uid, step=STEP_SUBJECT, lang=lang_for_state, pending_msgs=pending)
+                    msg = build_lang_select()
+                    pending = state.get('pending_msgs', [])
+                    pending.append(('user', media_label))
+                    pending.append(('assistant', msg))
+                    await event.respond(msg, buttons=_lang_buttons())
+                    set_state(uid, step=STEP_LANG, pending_msgs=pending)
                 return
 
+            if step == STEP_LANG:
+                # Sticker/photo sent while waiting for language — re-prompt
+                await event.respond(build_lang_select(), buttons=_lang_buttons())
+                return
+
+            lang = state.get('lang', 'en')
             case_id = state.get('case_id')
             if not case_id:
                 clear_state(uid)
-                subjects = await run_sync(get_active_subjects)
-                msg = build_greeting(lang, subjects) if lang else build_greeting_universal(subjects)
-                await event.respond(msg, buttons=_subject_buttons(subjects) or None)
-                set_state(uid, step=STEP_SUBJECT, lang=lang_for_state)
+                db_lang = getattr(user, 'language_code', '') or ''
+                if db_lang in ('en', 'ru', 'uz'):
+                    subjects = await run_sync(get_active_subjects)
+                    msg = build_greeting(db_lang, subjects)
+                    await event.respond(msg, buttons=_subject_buttons(subjects) or None)
+                    set_state(uid, step=STEP_SUBJECT, lang=db_lang)
+                else:
+                    await event.respond(build_lang_select(), buttons=_lang_buttons())
+                    set_state(uid, step=STEP_LANG)
                 return
 
             # Determine media type and filename

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 # ── Step constants ─────────────────────────────────────────────────────────────
 STEP_INIT = 'init'
+STEP_LANG = 'awaiting_lang'
 STEP_SUBJECT = 'awaiting_subject'
 STEP_SERVICE = 'awaiting_service'
 STEP_COLLECTING = 'collecting'
@@ -82,8 +83,14 @@ def db_get_or_create_user(tg_id: int, first_name: str = None, username: str = No
     from core.models import TgUser
     return TgUser.objects.get_or_create(
         telegram_id=tg_id,
-        defaults={'first_name': first_name, 'username': username, 'language_code': 'en'},
+        defaults={'first_name': first_name, 'username': username, 'language_code': ''},
     )
+
+
+def db_save_user_language(tg_id: int, lang: str) -> None:
+    """Persist user-chosen language to TgUser record."""
+    from core.models import TgUser
+    TgUser.objects.filter(telegram_id=tg_id).update(language_code=lang)
 
 
 def db_get_or_open_case(user, service_slug: str = 'general'):
@@ -382,6 +389,35 @@ def generate_final_message(lang: str) -> str:
 
 
 # ── Message string builders ────────────────────────────────────────────────────
+
+def build_lang_select() -> str:
+    """Universal welcome shown before language is known — asks user to pick a language."""
+    return (
+        '👋 Welcome to Brightway Consulting!\n'
+        '👋 Добро пожаловать в Brightway Consulting!\n'
+        "👋 Brightway Consulting'a xush kelibsiz!\n\n"
+        'Please choose your language:\n'
+        'Пожалуйста, выберите язык:\n'
+        'Iltimos, tilingizni tanlang:'
+    )
+
+
+_LANG_KEYWORDS: dict[str, list[str]] = {
+    'en': ['english', 'eng', '🇬🇧'],
+    'ru': ['русский', 'russian', 'рус', 'rus', '🇷🇺'],
+    'uz': ["o'zbek", "oʻzbek", 'uzbek', 'uz', 'узбек', '🇺🇿', 'ozbek'],
+}
+
+
+def parse_lang_choice(text: str) -> str | None:
+    """Return 'en', 'ru', or 'uz' if the text clearly identifies a language, else None."""
+    lower = text.strip().lower()
+    for lang, keywords in _LANG_KEYWORDS.items():
+        for kw in keywords:
+            if kw in lower:
+                return lang
+    return None
+
 
 def build_greeting(lang: str, subjects: list) -> str:
     intro = {
