@@ -1199,17 +1199,36 @@ async def fetch_and_save_chat(client: TelegramClient, user_tg_id: str, limit: in
 
 async def process_import(client: TelegramClient, req_id: int, user_tg_id: str):
     """Process a single import request (from panel Add User or Import Chat queue)."""
+    from core.models import ImportRequest
+
+    def _mark_error(msg: str):
+        try:
+            req = ImportRequest.objects.get(pk=req_id)
+            req.status = 'error'
+            req.error_msg = msg[:500]
+            req.save(update_fields=['status', 'error_msg'])
+        except Exception as ex:
+            logger.warning(f"Could not mark import {req_id} as error: {ex}")
+
     try:
         count, error = await fetch_and_save_chat(client, user_tg_id, limit=3000, import_req_id=req_id)
         if error:
-            from core.models import ImportRequest
-            req = ImportRequest.objects.get(pk=req_id)
-            req.status = 'error'
-            req.error_msg = error
-            req.save()
+            await run_sync(lambda: _mark_error(error))
             raise Exception(error)
         logger.info(f"Imported {count} messages for {user_tg_id}")
     except Exception as e:
+        err_msg = str(e)
+        # Entity-not-found: the account hasn't seen this user. Mark as error but don't crash the loop.
+        if 'Could not find the input entity' in err_msg or 'PeerUser' in err_msg:
+            logger.warning(
+                f"process_import: Telegram entity not found for {user_tg_id}. "
+                f"The userbot account needs to have chatted with this user first. Marking as error."
+            )
+            await run_sync(lambda: _mark_error(
+                f"Telegram entity not found: the userbot account has not interacted with user {user_tg_id} yet. "
+                f"Ask them to send a message first, then retry Fix Chat."
+            ))
+            return  # don't re-raise; let the queue continue to next pending import
         logger.error(f"Import error for {user_tg_id}: {e}")
         raise
 
