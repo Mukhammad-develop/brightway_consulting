@@ -73,6 +73,12 @@ urlpatterns = [
     path('admin/subjects/<int:subject_id>/edit', services.subject_edit, name='subject_edit'),
     path('admin/subjects/<int:subject_id>/delete', services.subject_delete, name='subject_delete'),
     path('admin/subjects/<int:subject_id>/toggle', services.subject_toggle, name='subject_toggle'),
+
+    # FAQ Management
+    path('admin/faq/add', services.faq_add, name='faq_add'),
+    path('admin/faq/<int:faq_id>/edit', services.faq_edit, name='faq_edit'),
+    path('admin/faq/<int:faq_id>/delete', services.faq_delete, name='faq_delete'),
+    path('admin/faq/<int:faq_id>/toggle', services.faq_toggle, name='faq_toggle'),
     
     # Reports (elevated users only)
     path('admin/reports', reports.reports_dashboard, name='reports'),

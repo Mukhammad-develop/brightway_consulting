@@ -54,7 +54,7 @@ from .simple_flow import (
     build_greeting, build_greeting_universal, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
     build_consultant_confirm, build_consultant_declined,
-    ai_contextual_reply, ai_answer_question,
+    ai_contextual_reply, find_faq_answer, get_faq_redirect_text,
 )
 
 # Configure logging
@@ -463,7 +463,7 @@ async def _ub_handle_collecting(client: TelegramClient, chat_id: int,
 
     if text:
         await run_sync(lambda: case.add_message('user', text))
-        # Check if the user is asking a clarifying question; if so, answer it
+        # Load service definition for FAQ context
         svc_def = None
         svc_id = state.get('service_id')
         if svc_id:
@@ -472,10 +472,15 @@ async def _ub_handle_collecting(client: TelegramClient, chat_id: int,
                 svc_def = await run_sync(lambda: ServiceDefinition.objects.get(pk=svc_id))
             except Exception:
                 pass
-        ai_reply = await run_sync(lambda: ai_answer_question(text, svc_def, lang))
-        if ai_reply:
-            await run_sync(lambda: case.add_message('assistant', ai_reply))
-            await client.send_message(chat_id, ai_reply)
+        # FAQ-aware question handling
+        is_question, faq_answer = await run_sync(lambda: find_faq_answer(text, svc_def, lang))
+        if is_question:
+            if faq_answer:
+                reply = faq_answer
+            else:
+                reply = await run_sync(lambda: get_faq_redirect_text(lang))
+            await run_sync(lambda: case.add_message('assistant', reply))
+            await client.send_message(chat_id, reply)
         else:
             await client.send_message(chat_id, build_ack(lang))
     elif file_label:

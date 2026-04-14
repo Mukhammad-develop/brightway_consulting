@@ -311,30 +311,45 @@ def is_done_message(text: str, lang: str = 'en') -> bool:
         return False
 
 
-def ai_answer_question(text: str, service_def, lang: str) -> str | None:
+def find_faq_answer(text: str, service_def, lang: str) -> tuple:
     """
-    During the collecting step, determine whether the user's message is a
-    clarifying question or actual data being submitted.
+    Classify a user message during the collecting step.
 
-    Returns a brief answer string (in the user's language) if it's a question,
-    or None if it's data/information (caller should just acknowledge).
+    Returns (is_question: bool, answer: str | None):
+      - (False, None)  → not a question; caller should send a simple ack
+      - (True, str)    → question matched in FAQ; str is the answer in the user's language
+      - (True, None)   → question not covered by FAQ; caller should redirect to consultant
     """
     from bot.services import get_openai_client
+    from core.models import FaqEntry
+
     client = get_openai_client()
     if not client:
-        return None
+        return False, None
+
+    faq_entries = list(FaqEntry.objects.filter(is_active=True).order_by('display_order', 'created_at'))
     lang_name = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}.get(lang, 'English')
     svc_name = service_def.name if service_def else 'our service'
+
+    faq_block = ''
+    if faq_entries:
+        faq_lines = '\n'.join(
+            f'[{i + 1}] Q: {e.question}\nA: {e.answer}'
+            for i, e in enumerate(faq_entries)
+        )
+        faq_block = f'\n\nKnowledge base (FAQ):\n{faq_lines}'
+
     system = (
-        f'You are a helpful assistant for Brightway Consulting. '
-        f'The client is applying for "{svc_name}" and is in the process of submitting their documents and information.\n\n'
-        f'Decide: is this message a QUESTION asking for clarification, or is it information/data being provided?\n\n'
-        f'If it IS a question: answer it briefly and helpfully in {lang_name} (1-3 sentences). '
-        f'Then in the same language, remind them to continue sending the required information.\n\n'
-        f'If it is NOT a question (i.e. actual data, a name, a number, a file description, etc.): '
-        f'reply with exactly one word: DATA\n\n'
-        f'No markdown, no asterisks.'
+        f'The client is applying for "{svc_name}" and is submitting documents/information.{faq_block}\n\n'
+        f'Classify the user message and reply with EXACTLY one of these formats:\n'
+        f'  DATA               — the message is data/information being submitted (not a question)\n'
+        f'  NO_ANSWER          — the message is a question but nothing in the FAQ covers it\n'
+        f'  ANSWER: <text>     — the message is a question answered by the FAQ; <text> is the answer '
+        f'in {lang_name} (1-3 sentences, natural, no markdown)\n\n'
+        f'Rules: adapt the FAQ answer to the user\'s context; keep it concise; '
+        f'end with a one-sentence reminder to continue submitting their documents.'
     )
+
     try:
         resp = client.chat.completions.create(
             model='gpt-4o-mini',
@@ -342,17 +357,76 @@ def ai_answer_question(text: str, service_def, lang: str) -> str | None:
                 {'role': 'system', 'content': system},
                 {'role': 'user', 'content': text},
             ],
-            max_tokens=200,
-            temperature=0.3,
-            timeout=12,
+            max_tokens=280,
+            temperature=0.2,
+            timeout=14,
         )
-        answer = resp.choices[0].message.content.strip()
-        if answer.upper().startswith('DATA'):
-            return None
-        return answer
+        raw = resp.choices[0].message.content.strip()
+        upper = raw.upper()
+        if upper.startswith('DATA'):
+            return False, None
+        if upper.startswith('NO_ANSWER'):
+            return True, None
+        if upper.startswith('ANSWER:'):
+            return True, raw[7:].strip()
+        # Unrecognised → treat as data to avoid false redirects
+        return False, None
     except Exception as e:
-        logger.warning('ai_answer_question error: %s', e)
-        return None
+        logger.warning('find_faq_answer error: %s', e)
+        return False, None
+
+
+def get_faq_redirect_text(lang: str) -> str:
+    """
+    Return the configurable "question forwarded to consultant" text in the
+    user's language.  Falls back to built-in defaults if the admin hasn't
+    configured the text yet.
+    """
+    from core.models import AiSettings
+    from bot.services import get_openai_client
+
+    _fallbacks = {
+        'en': 'Your question has been forwarded to our consultant, who will get back to you shortly. '
+              'Please continue sending the remaining documents in the meantime.',
+        'ru': 'Ваш вопрос передан нашему консультанту — он ответит вам в ближайшее время. '
+              'Пожалуйста, продолжайте отправлять оставшиеся документы.',
+        'uz': "Savolingiz konsultantimizga yuborildi — u tez orada javob beradi. "
+              "Shu orada qolgan hujjatlarni yuborishda davom eting.",
+    }
+
+    base_text = ''
+    try:
+        s = AiSettings.objects.filter(pk=1).first()
+        base_text = (s.faq_unanswered_text or '').strip() if s else ''
+    except Exception:
+        pass
+
+    if not base_text:
+        return _fallbacks.get(lang, _fallbacks['en'])
+
+    # Translate the admin-configured text to the user's language on the fly
+    client = get_openai_client()
+    if not client:
+        return base_text
+
+    lang_name = {'en': 'English', 'ru': 'Russian', 'uz': 'Uzbek'}.get(lang, 'English')
+    try:
+        resp = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[
+                {'role': 'system', 'content':
+                    f'Translate the following message to {lang_name}. '
+                    f'Keep the exact tone and meaning. Return ONLY the translated text.'},
+                {'role': 'user', 'content': base_text},
+            ],
+            max_tokens=180,
+            temperature=0.1,
+            timeout=8,
+        )
+        translated = resp.choices[0].message.content.strip()
+        return translated or base_text
+    except Exception:
+        return base_text
 
 
 def generate_final_message(lang: str) -> str:

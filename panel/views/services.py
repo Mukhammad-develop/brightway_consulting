@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST, require_http_methods
 from django.db.utils import OperationalError
 
-from core.models import ServiceDefinition, ServiceStep, Case, AiSettings, Subject
+from core.models import ServiceDefinition, ServiceStep, Case, AiSettings, Subject, FaqEntry
 from ..decorators import login_required, elevated_required, master_required
 from .helpers import session_ctx
 
@@ -47,6 +47,15 @@ def services_list(request):
                 messages.success(request, 'AI service classifier prompt updated.')
             except OperationalError:
                 messages.error(request, 'Database is missing AI settings table. Run migrations and reload the site.')
+            return redirect('panel:services_list')
+        if action == 'update_faq_text':
+            try:
+                s, _ = AiSettings.objects.get_or_create(pk=1)
+                s.faq_unanswered_text = (request.POST.get('faq_unanswered_text') or '').strip()
+                s.save(update_fields=['faq_unanswered_text'])
+                messages.success(request, 'FAQ unanswered-question text saved.')
+            except Exception as e:
+                messages.error(request, f'Failed to save: {e}')
             return redirect('panel:services_list')
         if action == 'reseed_ai_defaults':
             from django.core.management import call_command
@@ -87,11 +96,14 @@ def services_list(request):
             'steps': steps_with_icons,
         })
     
+    faq_entries = list(FaqEntry.objects.all())
+
     context = {
         'page_title': 'Services & AI',
         'services': service_data,
         'ai_settings': ai_settings,
         'ai_master_enabled': getattr(ai_settings, 'ai_master_enabled', True),
+        'faq_entries': faq_entries,
         **session_ctx(request),
     }
     return render(request, 'panel/services_list.html', context)
@@ -577,3 +589,62 @@ def subject_toggle(request, subject_id):
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({'ok': True, 'is_active': subject.is_active})
     return redirect('panel:subjects_list')
+
+
+# ── FAQ CRUD ───────────────────────────────────────────────────────────────────
+
+@login_required
+@elevated_required
+@require_POST
+def faq_add(request):
+    question = (request.POST.get('question') or '').strip()
+    answer = (request.POST.get('answer') or '').strip()
+    display_order = int(request.POST.get('display_order') or 0)
+    if not question or not answer:
+        messages.error(request, 'Both question and answer are required.')
+        return redirect('panel:services_list')
+    FaqEntry.objects.create(question=question, answer=answer, display_order=display_order)
+    messages.success(request, 'FAQ entry added.')
+    return redirect('panel:services_list')
+
+
+@login_required
+@elevated_required
+@require_http_methods(['GET', 'POST'])
+def faq_edit(request, faq_id):
+    entry = get_object_or_404(FaqEntry, pk=faq_id)
+    if request.method == 'POST':
+        entry.question = (request.POST.get('question') or '').strip() or entry.question
+        entry.answer = (request.POST.get('answer') or '').strip() or entry.answer
+        entry.display_order = int(request.POST.get('display_order') or 0)
+        entry.save()
+        messages.success(request, 'FAQ entry updated.')
+        return redirect('panel:services_list')
+    # GET: return JSON for modal pre-fill
+    return JsonResponse({
+        'ok': True, 'id': entry.pk,
+        'question': entry.question, 'answer': entry.answer,
+        'display_order': entry.display_order,
+    })
+
+
+@login_required
+@elevated_required
+@require_POST
+def faq_delete(request, faq_id):
+    entry = get_object_or_404(FaqEntry, pk=faq_id)
+    entry.delete()
+    messages.success(request, 'FAQ entry deleted.')
+    return redirect('panel:services_list')
+
+
+@login_required
+@elevated_required
+@require_POST
+def faq_toggle(request, faq_id):
+    entry = get_object_or_404(FaqEntry, pk=faq_id)
+    entry.is_active = not entry.is_active
+    entry.save(update_fields=['is_active'])
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'ok': True, 'is_active': entry.is_active})
+    return redirect('panel:services_list')

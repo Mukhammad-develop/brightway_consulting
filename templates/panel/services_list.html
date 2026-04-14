@@ -114,6 +114,123 @@
     </div>
     {% endif %}
 
+    <!-- FAQ Block -->
+    <div class="panel-card" style="margin-top: 1.5rem;">
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+            <span>FAQ — Bot Knowledge Base</span>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('faqAddModal').style.display='flex'">+ Add FAQ</button>
+        </div>
+        <div class="card-body">
+            <!-- Unanswered question redirect text -->
+            <form method="post" action="{% url 'panel:services_list' %}" style="margin-bottom:1.5rem; padding-bottom:1.25rem; border-bottom:1px solid var(--border);">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_faq_text">
+                <div class="form-group" style="margin-bottom:.5rem;">
+                    <label style="font-weight:600;">Unanswered Question Text</label>
+                    <small style="display:block; color:var(--text-muted); margin-bottom:.4rem;">
+                        Shown when a user's question is not in the FAQ. Write in any language — the bot automatically translates it for each user. Leave blank to use a built-in default.
+                    </small>
+                    <textarea name="faq_unanswered_text" class="form-textarea" rows="3"
+                              placeholder="e.g. Your question has been forwarded to our consultant, who will get back to you shortly.">{{ ai_settings.faq_unanswered_text|default:'' }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-outline btn-sm">Save Text</button>
+            </form>
+
+            <!-- FAQ entry list -->
+            {% if faq_entries %}
+            <div class="faq-list">
+                {% for entry in faq_entries %}
+                <div class="faq-row" id="faq-row-{{ entry.pk }}">
+                    <div class="faq-row-main">
+                        <div class="faq-q">{{ entry.question }}</div>
+                        <div class="faq-a">{{ entry.answer|truncatechars:120 }}</div>
+                    </div>
+                    <div class="faq-row-actions">
+                        <span class="badge {% if entry.is_active %}badge-success{% else %}badge-secondary{% endif %}"
+                              style="font-size:.7rem;">{% if entry.is_active %}Active{% else %}Off{% endif %}</span>
+                        <button class="btn btn-xs btn-outline"
+                                onclick="openFaqEdit({{ entry.pk }}, '{{ entry.question|escapejs }}', '{{ entry.answer|escapejs }}', {{ entry.display_order }})">
+                            Edit
+                        </button>
+                        <form method="post" action="{% url 'panel:faq_toggle' entry.pk %}" style="display:inline;" class="faq-toggle-form" data-id="{{ entry.pk }}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-xs btn-outline">
+                                {% if entry.is_active %}Disable{% else %}Enable{% endif %}
+                            </button>
+                        </form>
+                        <form method="post" action="{% url 'panel:faq_delete' entry.pk %}" style="display:inline;"
+                              onsubmit="return confirm('Delete this FAQ entry?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-xs btn-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p style="color:var(--text-muted); font-size:.875rem; margin:0;">No FAQ entries yet. Add your first one above.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- FAQ Add Modal -->
+    <div id="faqAddModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box">
+            <div class="modal-header">
+                <strong>Add FAQ Entry</strong>
+                <button class="btn btn-text" onclick="document.getElementById('faqAddModal').style.display='none'">✕</button>
+            </div>
+            <form method="post" action="{% url 'panel:faq_add' %}">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Question</label>
+                    <input type="text" name="question" class="form-input" placeholder="e.g. How long does the visa process take?" required maxlength="500">
+                </div>
+                <div class="form-group">
+                    <label>Answer</label>
+                    <textarea name="answer" class="form-textarea" rows="4" placeholder="Write the answer in English (or any language). The bot translates it for each user." required></textarea>
+                </div>
+                <div class="form-group" style="max-width:140px;">
+                    <label>Display Order</label>
+                    <input type="number" name="display_order" class="form-input" value="0" min="0">
+                </div>
+                <div style="display:flex;gap:.5rem;margin-top:1rem;">
+                    <button type="submit" class="btn btn-primary">Add FAQ</button>
+                    <button type="button" class="btn btn-outline" onclick="document.getElementById('faqAddModal').style.display='none'">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FAQ Edit Modal -->
+    <div id="faqEditModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+        <div class="modal-box">
+            <div class="modal-header">
+                <strong>Edit FAQ Entry</strong>
+                <button class="btn btn-text" onclick="document.getElementById('faqEditModal').style.display='none'">✕</button>
+            </div>
+            <form id="faqEditForm" method="post" action="">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Question</label>
+                    <input type="text" id="faqEditQuestion" name="question" class="form-input" required maxlength="500">
+                </div>
+                <div class="form-group">
+                    <label>Answer</label>
+                    <textarea id="faqEditAnswer" name="answer" class="form-textarea" rows="5" required></textarea>
+                </div>
+                <div class="form-group" style="max-width:140px;">
+                    <label>Display Order</label>
+                    <input type="number" id="faqEditOrder" name="display_order" class="form-input" value="0" min="0">
+                </div>
+                <div style="display:flex;gap:.5rem;margin-top:1rem;">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-outline" onclick="document.getElementById('faqEditModal').style.display='none'">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="panel-card" style="margin-top: 1.5rem;">
         <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
             <span>AI Settings</span>
@@ -224,6 +341,19 @@ input:focus-visible + .toggle-slider { outline: 2px solid var(--accent-primary);
 .ai-master-badge { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 600; }
 .ai-master-badge.on { background: rgba(34,197,94,.15); color: #22c55e; }
 .ai-master-badge.off { background: rgba(248,113,113,.18); color: #f87171; }
+
+/* FAQ styles */
+.faq-list { display: flex; flex-direction: column; gap: .6rem; }
+.faq-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: .75rem; background: var(--surface-2, var(--bg-tertiary)); border-radius: 8px; border: 1px solid var(--border); }
+.faq-row-main { flex: 1; min-width: 0; }
+.faq-q { font-weight: 600; font-size: .875rem; margin-bottom: .2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.faq-a { font-size: .8rem; color: var(--text-muted, var(--text-secondary)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.faq-row-actions { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; flex-wrap: wrap; }
+
+/* Generic modal overlay (reusable) */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 9999; align-items: center; justify-content: center; }
+.modal-box { background: var(--bg-primary, #fff); border-radius: 12px; max-width: 560px; width: 94%; max-height: 90vh; overflow-y: auto; padding: 1.5rem; box-shadow: 0 8px 40px rgba(0,0,0,.3); }
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
 </style>
 
 <!-- Prompt Preview Modal -->
@@ -308,6 +438,15 @@ function toggleService(serviceId, isActive) {
             location.reload();
         }
     });
+}
+
+// ── FAQ modal helpers ──────────────────────────────────────────────────────────
+function openFaqEdit(id, question, answer, order) {
+    document.getElementById('faqEditQuestion').value = question;
+    document.getElementById('faqEditAnswer').value = answer;
+    document.getElementById('faqEditOrder').value = order;
+    document.getElementById('faqEditForm').action = `/admin/faq/${id}/edit`;
+    document.getElementById('faqEditModal').style.display = 'flex';
 }
 </script>
 {% endblock %}

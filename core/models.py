@@ -363,6 +363,16 @@ class AiSettings(models.Model):
 
     # Misc behavior / safety rules appended to every system prompt
     common_rules = models.TextField(blank=True, default='')
+
+    # Text sent when user asks a question not covered by FAQ
+    # Write it in any language; bot will translate to the user's chosen language.
+    faq_unanswered_text = models.TextField(
+        blank=True, default='',
+        help_text='Shown when a user asks a question not found in the FAQ. '
+                  'Write in any language — the bot will translate it for the user. '
+                  'Leave blank for a built-in default.',
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -370,6 +380,22 @@ class AiSettings(models.Model):
 
     def __str__(self):
         return f"AI Settings (updated {self.updated_at})"
+
+
+class FaqEntry(models.Model):
+    """FAQ entry used by the bot to answer common questions during document collection."""
+    question = models.CharField(max_length=500)
+    answer = models.TextField()
+    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'faq_entries'
+        ordering = ['display_order', 'created_at']
+
+    def __str__(self):
+        return self.question[:80]
 
 
 class ServiceStep(models.Model):
