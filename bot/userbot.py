@@ -50,7 +50,7 @@ from .simple_flow import (
     db_flush_pending_messages, db_finalise_case,
     detect_lang, ai_match_subject, ai_match_service,
     is_done_message, wants_consultant, is_confirm_yes, is_confirm_no,
-    build_greeting, build_service_list, build_collect_prompt,
+    build_greeting, build_greeting_universal, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
     build_consultant_confirm, build_consultant_declined,
     ai_contextual_reply, ai_answer_question,
@@ -66,6 +66,24 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+_KNOWN_LANGS = {'en', 'ru', 'uz'}
+
+
+def _lang_from_sender(sender, state: dict) -> str:
+    """
+    Resolve the best language to use for a user.
+    Priority: 1) already stored in conversation state  2) Telegram lang_code
+    Falls back to None so the caller can decide to show a universal greeting.
+    """
+    stored = state.get('lang')
+    if stored in _KNOWN_LANGS:
+        return stored
+    tg_lang = (getattr(sender, 'lang_code', None) or '').lower()[:2]
+    if tg_lang in _KNOWN_LANGS:
+        return tg_lang
+    return None  # unknown — caller should use universal greeting
+
 
 # Directories
 SESSIONS_DIR = PROJECT_ROOT / 'sessions'
@@ -703,23 +721,24 @@ def register_handlers(client: TelegramClient, account_index: int):
 
             state = get_state(uid)
             step = state.get('step', STEP_INIT)
-            lang = state.get('lang', 'en')
+            lang = _lang_from_sender(sender, state)
+            lang_for_state = lang or 'en'
 
             if step != STEP_COLLECTING:
                 subjects = await run_sync(get_active_subjects)
-                msg = build_greeting(lang, subjects)
+                msg = build_greeting(lang, subjects) if lang else build_greeting_universal(subjects)
                 buttons = _subject_buttons(subjects)
                 await event.respond(msg, buttons=buttons or None)
-                set_state(uid, step=STEP_SUBJECT, lang=lang)
+                set_state(uid, step=STEP_SUBJECT, lang=lang_for_state)
                 return
 
             case_id = state.get('case_id')
             if not case_id:
                 clear_state(uid)
                 subjects = await run_sync(get_active_subjects)
-                await event.respond(build_greeting(lang, subjects),
-                                    buttons=_subject_buttons(subjects) or None)
-                set_state(uid, step=STEP_SUBJECT, lang=lang)
+                msg = build_greeting(lang, subjects) if lang else build_greeting_universal(subjects)
+                await event.respond(msg, buttons=_subject_buttons(subjects) or None)
+                set_state(uid, step=STEP_SUBJECT, lang=lang_for_state)
                 return
 
             # Determine media type and filename

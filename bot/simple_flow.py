@@ -405,6 +405,36 @@ def build_greeting(lang: str, subjects: list) -> str:
     return intro + ('\n\n' + '\n'.join(lines) if lines else '')
 
 
+def build_greeting_universal(subjects: list) -> str:
+    """
+    Tri-lingual greeting shown when the user's language is not yet known
+    (e.g. their very first message was a sticker or media).
+    Lists service categories once using each language's name.
+    """
+    intro = (
+        '👋 Hello! Welcome to Brightway Consulting.\n'
+        '👋 Добро пожаловать в Brightway Consulting!\n'
+        '👋 Brightway Consulting ga xush kelibsiz!\n\n'
+        'I am an AI assistant — Я ИИ-помощник — Men AI yordamchisiman.\n'
+        'I will collect your details and pass you to a consultant.\n\n'
+        'Please choose a category / Выберите категорию / Toifani tanlang:'
+    )
+    # Show each subject in all 3 languages so every user can recognise their option
+    lines = []
+    for i, s in enumerate(subjects, 1):
+        en = s.get_name('en')
+        ru = s.get_name('ru')
+        uz = s.get_name('uz')
+        # Deduplicate identical names across languages
+        parts = [en]
+        if ru and ru != en:
+            parts.append(ru)
+        if uz and uz not in parts:
+            parts.append(uz)
+        lines.append(f'{i}. {s.icon_emoji} {" / ".join(parts)}')
+    return intro + ('\n\n' + '\n'.join(lines) if lines else '')
+
+
 def build_service_list(lang: str, subject, services: list) -> str:
     intro = {
         'en': f'{subject.get_name(lang)} — please choose a service:',
