@@ -55,7 +55,7 @@ def developer_view(request):
     # Build conversation display for each case on this page
     cases_data = []
     for case in page_obj:
-        conversation = case.conversation or []
+        conversation = case.get_conversation()
         file_refs = get_file_refs_for_conversation(case, conversation)
         messages_display = build_conversation_display(conversation, file_refs)
         cases_data.append({
