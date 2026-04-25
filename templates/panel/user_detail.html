@@ -190,7 +190,7 @@
                                 {% if msg.voice_transcription %}
                                     <div class="voice-transcription">{{ msg.voice_transcription }}</div>
                                 {% endif %}
-                                {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' and not msg.content|startswith:"[FILE:" %}
+                                {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' and '[FILE:' not in msg.content %}
                                     <div class="voice-transcription">{{ msg.content|linebreaksbr }}</div>
                                 {% endif %}
                                 <div class="msg-meta-inline">
