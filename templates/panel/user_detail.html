@@ -375,8 +375,12 @@
                     {% endif %}
                     <form class="chat-send" id="chatSendForm" onsubmit="return false;">
                         {% csrf_token %}
-                        <textarea id="chatInput" class="form-input" rows="2" placeholder="Type a message to send via Telegram..."></textarea>
-                        <button type="button" class="btn btn-primary" id="chatSendBtn">Send</button>
+                        <div class="chat-send-inner">
+                            <textarea id="chatInput" rows="1" placeholder="Write a message…"></textarea>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="chatSendBtn" title="Send">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+                        </button>
                         <button type="button" class="btn btn-outline voice-rec-btn" id="voiceRecBtn" title="Record voice message">
                             🎤
                         </button>
@@ -419,6 +423,7 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    /* light mode: warm Telegram bg */
     background-color: #E5DDD5;
     background-image: url('data:image/svg+xml,%3Csvg width="20" height="20" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="%23d8cbbc" fill-opacity="0.4" fill-rule="evenodd"%3E%3Ccircle cx="3" cy="3" r="3"/%3E%3Ccircle cx="13" cy="13" r="3"/%3E%3C/g%3E%3C/svg%3E');
 }
@@ -426,163 +431,205 @@ body[data-theme="dark"] .chat-wrap-outer {
     background-color: #0e1621;
     background-image: none;
 }
+
+/* ── Messages container ── */
 .chat-messages.tg-style {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     padding: 12px 16px;
     overflow-y: auto;
     overscroll-behavior: contain;
 }
+.chat-messages.tg-style::-webkit-scrollbar { width: 4px; }
+.chat-messages.tg-style::-webkit-scrollbar-track { background: transparent; }
+.chat-messages.tg-style::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+body[data-theme="dark"] .chat-messages.tg-style::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+
+/* ── Message row ── */
 .tg-style .chat-msg {
     display: flex;
     flex-direction: column;
     max-width: 72%;
     position: relative;
-    margin-bottom: 1px;
 }
-/* Group same-sender messages tighter */
 .tg-style .chat-msg.user {
     align-self: flex-start;
-    margin-top: 2px;
+    margin-right: auto;
+    margin-top: 6px;
 }
-.tg-style .chat-msg.assistant, .tg-style .chat-msg.admin {
+.tg-style .chat-msg.assistant,
+.tg-style .chat-msg.admin {
     align-self: flex-end;
+    margin-left: auto;
+    margin-top: 6px;
+}
+/* Grouped — same sender, small gap */
+.tg-style .chat-msg.user + .tg-style .chat-msg.user,
+.tg-style .chat-msg.assistant + .tg-style .chat-msg.assistant,
+.tg-style .chat-msg.admin + .tg-style .chat-msg.admin {
     margin-top: 2px;
 }
+
+/* ── Bubble ── */
 .tg-style .msg-bubble {
     padding: 7px 12px 6px;
     border-radius: 18px;
     position: relative;
     word-break: break-word;
-    box-shadow: 0 1px 1px rgba(0,0,0,0.12);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
     font-size: 0.92rem;
     line-height: 1.45;
     display: inline-block;
     min-width: 60px;
 }
+/* Tail bottom-left (client) */
 .tg-style .chat-msg.user .msg-bubble {
     border-bottom-left-radius: 4px;
 }
-.tg-style .chat-msg.assistant .msg-bubble, .tg-style .chat-msg.admin .msg-bubble {
-    border-bottom-right-radius: 4px;
-}
-/* Bubble tails */
 .tg-style .chat-msg.user .msg-bubble::before {
     content: '';
     position: absolute;
-    bottom: 0;
-    left: -6px;
-    width: 12px;
-    height: 12px;
+    bottom: 0; left: -7px;
+    width: 14px; height: 14px;
     background-color: inherit;
-    border-bottom-right-radius: 12px;
+    border-bottom-right-radius: 14px;
     z-index: -1;
 }
-.tg-style .chat-msg.assistant .msg-bubble::after, .tg-style .chat-msg.admin .msg-bubble::after {
+/* Tail bottom-right (admin/assistant) */
+.tg-style .chat-msg.assistant .msg-bubble,
+.tg-style .chat-msg.admin .msg-bubble {
+    border-bottom-right-radius: 4px;
+}
+.tg-style .chat-msg.assistant .msg-bubble::before,
+.tg-style .chat-msg.admin .msg-bubble::before {
     content: '';
     position: absolute;
-    bottom: 0;
-    right: -6px;
-    width: 12px;
-    height: 12px;
+    bottom: 0; right: -7px;
+    width: 14px; height: 14px;
     background-color: inherit;
-    border-bottom-left-radius: 12px;
+    border-bottom-left-radius: 14px;
     z-index: -1;
 }
+/* Clearfix for float */
 .tg-style .msg-bubble::after {
-    content: "";
-    display: table;
-    clear: both;
+    content: ""; display: table; clear: both;
 }
 
+/* ── File bubbles ── */
 .tg-style .msg-file-bubble {
     padding: 4px;
     padding-bottom: 6px;
 }
-/* Colors */
+
+/* ── Bubble colours ── */
 body[data-theme="light"] .tg-style .chat-msg.user .msg-bubble {
     background-color: #ffffff;
     color: #000;
 }
-body[data-theme="light"] .tg-style .chat-msg.assistant .msg-bubble, body[data-theme="light"] .tg-style .chat-msg.admin .msg-bubble {
-    background-color: #e1ffc7;
+body[data-theme="light"] .tg-style .chat-msg.assistant .msg-bubble,
+body[data-theme="light"] .tg-style .chat-msg.admin .msg-bubble {
+    background-color: #dcf8c6;
     color: #000;
 }
 body[data-theme="dark"] .tg-style .chat-msg.user .msg-bubble {
     background-color: #182533;
-    color: #fff;
+    color: #e8f1f8;
 }
-body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble, body[data-theme="dark"] .tg-style .chat-msg.admin .msg-bubble {
+body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble,
+body[data-theme="dark"] .tg-style .chat-msg.admin .msg-bubble {
     background-color: #2b5278;
-    color: #fff;
+    color: #e8f1f8;
 }
+
+/* ── Inline media ── */
 .chat-inline-photo, .chat-inline-video {
     max-width: 100%;
-    max-height: 350px;
-    border-radius: 8px;
+    max-height: 320px;
+    border-radius: 14px;
     display: block;
 }
 .chat-inline-audio {
     height: 40px;
-    width: 260px;
+    width: 240px;
     outline: none;
     display: block;
     margin: 4px;
 }
+
+/* ── Voice note text ── */
 .voice-transcription {
-    padding: 6px 8px;
+    padding: 4px 8px 2px;
     font-style: italic;
-    opacity: 0.85;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
+    opacity: 0.7;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    margin-top: 4px;
 }
-.msg-text {
-    display: inline;
+body[data-theme="light"] .voice-transcription {
+    border-top-color: rgba(0,0,0,0.08);
+    opacity: 0.6;
 }
+
+/* ── Timestamp ── */
 .msg-meta-inline {
     float: right;
-    font-size: 0.7rem;
-    opacity: 0.6;
-    margin-left: 12px;
-    margin-top: 6px;
+    font-size: 0.68rem;
+    opacity: 0.55;
+    margin-left: 10px;
+    margin-top: 4px;
     position: relative;
-    bottom: -2px;
+    bottom: -1px;
     line-height: 1;
     white-space: nowrap;
 }
 .msg-author {
-    font-weight: 500;
-    opacity: 0.9;
+    font-weight: 600;
+    opacity: 0.85;
 }
+.msg-text { display: inline; }
+
+/* ── Input bar ── */
 .chat-send {
     display: flex;
-    gap: 0.5rem;
+    gap: 8px;
     align-items: flex-end;
-    padding: 10px 12px;
+    padding: 10px 14px;
     background: var(--bg-primary);
     border-top: 1px solid var(--border-color);
     flex-shrink: 0;
 }
+.chat-send-inner {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 24px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    transition: border-color 0.2s;
+}
+.chat-send-inner:focus-within {
+    border-color: var(--primary-color);
+}
 .chat-send textarea {
     flex: 1;
     resize: none;
-    min-height: 44px;
+    min-height: 28px;
     max-height: 120px;
-    border-radius: 22px;
-    padding: 10px 16px;
-    font-size: 0.95rem;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
+    background: transparent;
+    border: none;
     outline: none;
-    transition: border-color 0.2s;
-    overflow-y: auto;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.93rem;
+    line-height: 1.4;
+    padding: 3px 0;
 }
-.chat-send textarea:focus {
-    border-color: var(--primary-color);
-}
+.chat-send textarea::placeholder { color: var(--text-muted); }
 .chat-send .btn-primary {
     border-radius: 50%;
     width: 44px;
@@ -591,13 +638,27 @@ body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble, body[data-the
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.chat-send .btn-primary:hover {
+    transform: scale(1.07);
+}
+.voice-rec-btn {
+    padding: 0.4rem 0.6rem;
+    font-size: 1.1rem;
+    line-height: 1;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
 }
-.chat-file-card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.chat-file-icon { font-size: 1.25rem; }
-.chat-file-name { font-size: 0.9rem; word-break: break-all; }
-.chat-file-actions { display: flex; gap: 0.35rem; margin-left: auto; }
+
 
 .assign-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .form-select-sm { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
