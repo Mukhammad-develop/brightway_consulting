@@ -9,9 +9,15 @@
 {% endblock %}
 
 {% block content %}
-<div class="detail-page">
-    <div class="detail-grid">
-        <!-- User Profile Card -->
+<div class="detail-page tg-page-layout">
+    <!-- Overlay -->
+    <div class="tg-profile-overlay" id="tgOverlay" onclick="toggleUserProfile()"></div>
+    
+    <!-- Right Sidebar (Profile, Cases, Docs, Notes) -->
+    <div class="tg-right-sidebar" id="tgRightSidebar">
+        <button class="tg-sidebar-close" onclick="toggleUserProfile()">&times;</button>
+        <div class="tg-sidebar-scroll">
+            <!-- User Profile Card -->
         <div class="panel-card profile-card">
             <div class="card-body">
                 <div class="profile-header">
@@ -135,102 +141,6 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Conversation, Cases & Documents -->
-        <div class="detail-main">
-            <!-- Conversation & Reply (Telegram) -->
-            <div class="panel-card chat-panel">
-                <div class="card-header">
-                    <h3>Conversation</h3>
-                    {% if active_case %}
-                    <span class="badge badge-{{ active_case.service }}">Case #{{ active_case.pk }}</span>
-                    <span class="chat-ai-toggle ai-state-{% if active_case.ai_enabled %}on{% else %}off{% endif %}" id="chatAiToggle">
-                        <span class="ai-status" id="aiStatus">AI: {{ active_case.ai_enabled|yesno:"On,Off" }}</span>
-                        {% if not ai_master_enabled %}
-                        <span class="ai-master-hint">globally disabled</span>
-                        {% endif %}
-                        <button type="button" class="btn btn-sm btn-outline" id="aiToggleBtn" data-case-id="{{ active_case.pk }}" data-toggle-url="{% url 'panel:case_toggle_ai' active_case.pk %}" title="Turn AI responses on or off for this chat">Toggle AI</button>
-                    </span>
-                    {% endif %}
-                    <form method="post" action="{% url 'panel:user_fix_chat' user_obj.pk %}" style="margin:0;" id="fixChatForm">
-                        {% csrf_token %}
-                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
-                            <button type="submit" class="btn btn-sm btn-outline" id="fixChatBtn"
-                                    onclick="this.disabled=true;this.textContent='Queued…';this.closest('form').submit();">
-                                Fix Chat
-                            </button>
-                            <span style="font-size:0.7rem;color:var(--text-secondary);white-space:nowrap;">Re-pull if chat looks wrong or incomplete</span>
-                        </div>
-                    </form>
-                </div>
-                <div class="card-body chat-wrap chat-wrap-outer">
-                    {% if conversation %}
-                    <div class="chat-messages tg-style" id="chatMessages">
-                        {% for msg in conversation %}
-                        <div class="chat-msg {{ msg.role }}" data-timestamp="{{ msg.timestamp|default:'' }}">
-                            {% if msg.file_info %}
-                            <div class="msg-bubble msg-file-bubble">
-                                {% if msg.file_media_type == 'photo' %}
-                                <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank">
-                                    <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="Photo" loading="lazy">
-                                </a>
-                                {% elif msg.file_media_type == 'voice' %}
-                                <audio controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-audio"></audio>
-                                {% elif msg.file_media_type == 'video' %}
-                                <video controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-video"></video>
-                                {% else %}
-                                <div class="chat-file-card">
-                                    <span class="chat-file-icon">📄</span>
-                                    <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
-                                    <div class="chat-file-actions">
-                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
-                                    </div>
-                                </div>
-                                {% endif %}
-                                {% if msg.voice_transcription %}
-                                    <div class="voice-transcription">{{ msg.voice_transcription }}</div>
-                                {% endif %}
-                                {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' and '[FILE:' not in msg.content %}
-                                    <div class="voice-transcription">{{ msg.content|linebreaksbr }}</div>
-                                {% endif %}
-                                <div class="msg-meta-inline">
-                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
-                                </div>
-                            </div>
-                            {% else %}
-                            <div class="msg-bubble">
-                                <div class="msg-text">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
-                                <div class="msg-meta-inline">
-                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
-                                </div>
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div class="empty-state" id="chatEmpty">
-                        <p>No messages yet. Send a message below to start the conversation on Telegram.</p>
-                    </div>
-                    {% endif %}
-                    <form class="chat-send" id="chatSendForm" onsubmit="return false;">
-                        {% csrf_token %}
-                        <textarea id="chatInput" class="form-input" rows="2" placeholder="Type a message to send via Telegram..."></textarea>
-                        <button type="button" class="btn btn-primary" id="chatSendBtn">Send</button>
-                        <button type="button" class="btn btn-outline voice-rec-btn" id="voiceRecBtn" title="Record voice message">
-                            🎤
-                        </button>
-                    </form>
-                    <!-- Voice recording UI (hidden until recording starts) -->
-                    <div id="voiceRecUI" style="display:none;align-items:center;gap:0.75rem;padding:0.5rem 0;flex-wrap:wrap;">
-                        <span class="voice-rec-dot" id="voiceRecDot"></span>
-                        <span id="voiceRecTimer" style="font-size:0.9rem;font-weight:600;min-width:2.5rem;">0:00</span>
-                        <span style="font-size:0.85rem;color:var(--text-secondary);">Recording…</span>
-                        <button type="button" class="btn btn-sm btn-danger" id="voiceRecCancel">Cancel</button>
-                        <button type="button" class="btn btn-sm btn-primary" id="voiceRecSend">Send Voice</button>
-                    </div>
-                </div>
-            </div>
             
             <!-- User Cases -->
             <div class="panel-card">
@@ -371,6 +281,117 @@
                 </div>
             </div>
         </div>
+        </div>
+    </div>
+    
+    <!-- Main Chat Area -->
+    <div class="tg-chat-main">
+        <!-- Conversation & Reply (Telegram) -->
+            <div class="panel-card chat-panel">
+                <div class="tg-chat-header" onclick="toggleUserProfile()">
+                    <div class="tg-header-left">
+                        <div class="tg-header-avatar">
+                            {% if user_obj.profile_photo_path %}
+                            <img src="/uploads/{{ user_obj.profile_photo_path }}" alt="">
+                            {% else %}
+                            <span>{% if user_obj.first_name %}{{ user_obj.first_name|slice:":1"|upper }}{% elif user_obj.username %}{{ user_obj.username|slice:":1"|upper }}{% else %}ID{% endif %}</span>
+                            {% endif %}
+                        </div>
+                        <div class="tg-header-info">
+                            <span class="tg-header-name">{% if user_obj.first_name or user_obj.last_name %}{{ user_obj.first_name|default:"" }} {{ user_obj.last_name|default:"" }}{% elif user_obj.username %}@{{ user_obj.username }}{% else %}ID: {{ user_obj.telegram_id }}{% endif %}</span>
+                            <span class="tg-header-status">Tap here for profile info</span>
+                        </div>
+                    </div>
+                    <div class="tg-header-actions" onclick="event.stopPropagation();">
+                        {% if active_case %}
+                        <span class="badge badge-{{ active_case.service }}">Case #{{ active_case.pk }}</span>
+                        <span class="chat-ai-toggle ai-state-{% if active_case.ai_enabled %}on{% else %}off{% endif %}" id="chatAiToggle">
+                            <span class="ai-status" id="aiStatus">AI: {{ active_case.ai_enabled|yesno:"On,Off" }}</span>
+                            {% if not ai_master_enabled %}
+                            <span class="ai-master-hint">globally disabled</span>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline" id="aiToggleBtn" data-case-id="{{ active_case.pk }}" data-toggle-url="{% url 'panel:case_toggle_ai' active_case.pk %}" title="Turn AI responses on or off for this chat">Toggle AI</button>
+                        </span>
+                        {% endif %}
+                        <form method="post" action="{% url 'panel:user_fix_chat' user_obj.pk %}" style="margin:0;" id="fixChatForm">
+                            {% csrf_token %}
+                            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                                <button type="submit" class="btn btn-sm btn-outline" id="fixChatBtn"
+                                        onclick="this.disabled=true;this.textContent='Queued…';this.closest('form').submit();">
+                                    Fix Chat
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body chat-wrap chat-wrap-outer">
+                    {% if conversation %}
+                    <div class="chat-messages tg-style" id="chatMessages">
+                        {% for msg in conversation %}
+                        <div class="chat-msg {{ msg.role }}" data-timestamp="{{ msg.timestamp|default:'' }}">
+                            {% if msg.file_info %}
+                            <div class="msg-bubble msg-file-bubble">
+                                {% if msg.file_media_type == 'photo' %}
+                                <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank">
+                                    <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="Photo" loading="lazy">
+                                </a>
+                                {% elif msg.file_media_type == 'voice' %}
+                                <audio controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-audio"></audio>
+                                {% elif msg.file_media_type == 'video' %}
+                                <video controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-video"></video>
+                                {% else %}
+                                <div class="chat-file-card">
+                                    <span class="chat-file-icon">📄</span>
+                                    <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
+                                    <div class="chat-file-actions">
+                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if msg.voice_transcription %}
+                                    <div class="voice-transcription">{{ msg.voice_transcription }}</div>
+                                {% endif %}
+                                {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' and '[FILE:' not in msg.content %}
+                                    <div class="voice-transcription">{{ msg.content|linebreaksbr }}</div>
+                                {% endif %}
+                                <div class="msg-meta-inline">
+                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="msg-bubble">
+                                <div class="msg-text">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
+                                <div class="msg-meta-inline">
+                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state" id="chatEmpty">
+                        <p>No messages yet. Send a message below to start the conversation on Telegram.</p>
+                    </div>
+                    {% endif %}
+                    <form class="chat-send" id="chatSendForm" onsubmit="return false;">
+                        {% csrf_token %}
+                        <textarea id="chatInput" class="form-input" rows="2" placeholder="Type a message to send via Telegram..."></textarea>
+                        <button type="button" class="btn btn-primary" id="chatSendBtn">Send</button>
+                        <button type="button" class="btn btn-outline voice-rec-btn" id="voiceRecBtn" title="Record voice message">
+                            🎤
+                        </button>
+                    </form>
+                    <!-- Voice recording UI (hidden until recording starts) -->
+                    <div id="voiceRecUI" style="display:none;align-items:center;gap:0.75rem;padding:0.5rem 0;flex-wrap:wrap;">
+                        <span class="voice-rec-dot" id="voiceRecDot"></span>
+                        <span id="voiceRecTimer" style="font-size:0.9rem;font-weight:600;min-width:2.5rem;">0:00</span>
+                        <span style="font-size:0.85rem;color:var(--text-secondary);">Recording…</span>
+                        <button type="button" class="btn btn-sm btn-danger" id="voiceRecCancel">Cancel</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="voiceRecSend">Send Voice</button>
+                    </div>
+                </div>
+            </div>
     </div>
 </div>
 
@@ -543,6 +564,138 @@ body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble, body[data-the
 .voice-rec-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: voicePulse 1s infinite; flex-shrink: 0; }
 @keyframes voicePulse { 0%,100% { opacity:1; } 50% { opacity: 0.3; } }
 #voiceRecUI { border-top: 1px solid var(--border-color); margin-top: 0.25rem; padding-top: 0.5rem; }
+
+.tg-page-layout {
+    position: relative;
+    height: calc(100vh - 80px);
+    display: flex;
+    overflow: hidden;
+    margin: -24px; /* offset the default padding of main content */
+    background: var(--bg-secondary);
+}
+.tg-chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.tg-chat-main .chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: none;
+    border-radius: 0;
+    margin: 0;
+}
+.tg-chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    z-index: 10;
+}
+.tg-chat-header:hover {
+    background: var(--bg-tertiary);
+}
+.tg-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.tg-header-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.2rem;
+    overflow: hidden;
+}
+.tg-header-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.tg-header-info {
+    display: flex;
+    flex-direction: column;
+}
+.tg-header-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+.tg-header-status {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.tg-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.tg-right-sidebar {
+    position: fixed;
+    top: 0;
+    right: -420px;
+    width: 400px;
+    height: 100vh;
+    background: var(--bg-primary);
+    box-shadow: -5px 0 25px rgba(0,0,0,0.15);
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+.tg-right-sidebar.open {
+    right: 0;
+}
+.tg-sidebar-close {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: rgba(0,0,0,0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.tg-sidebar-close:hover { background: rgba(0,0,0,0.7); }
+.tg-sidebar-scroll {
+    overflow-y: auto;
+    padding: 24px;
+    padding-top: 60px; /* space for close btn */
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex: 1;
+}
+.tg-profile-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+}
+.tg-profile-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+.chat-wrap-outer { flex: 1; max-height: none; }
+body.sidebar-open { overflow: hidden; }
+
 </style>
 
 <script>
@@ -845,4 +998,21 @@ function toggleEditNote(noteId) {
     }
 }
 </script>
+
+<script>
+function toggleUserProfile() {
+    const sidebar = document.getElementById('tgRightSidebar');
+    const overlay = document.getElementById('tgOverlay');
+    if (sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('show');
+        document.body.classList.remove('sidebar-open');
+    } else {
+        sidebar.classList.add('open');
+        overlay.classList.add('show');
+        document.body.classList.add('sidebar-open');
+    }
+}
+</script>
+
 {% endblock %}
