@@ -163,41 +163,48 @@
                         </div>
                     </form>
                 </div>
-                <div class="card-body chat-wrap">
+                <div class="card-body chat-wrap chat-wrap-outer">
                     {% if conversation %}
-                    <div class="chat-messages" id="chatMessages">
+                    <div class="chat-messages tg-style" id="chatMessages">
                         {% for msg in conversation %}
                         <div class="chat-msg {{ msg.role }}" data-timestamp="{{ msg.timestamp|default:'' }}">
                             {% if msg.file_info %}
-                                {% if msg.file_media_type == 'voice' %}
-                                <div class="msg-bubble msg-voice-bubble">
-                                    <audio class="voice-player" controls preload="none"
-                                           src="{% url 'panel:file_view' msg.file_info.id %}">
-                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1">Download audio</a>
-                                    </audio>
-                                    {% if msg.voice_transcription %}
-                                    <div class="voice-transcript">{{ msg.voice_transcription }}</div>
-                                    {% endif %}
-                                </div>
-                                {% elif msg.file_media_type == 'photo' %}
-                                <div class="msg-bubble msg-file-bubble">
-                                    <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="photo">
-                                </div>
+                            <div class="msg-bubble msg-file-bubble">
+                                {% if msg.file_media_type == 'photo' %}
+                                <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank">
+                                    <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="Photo" loading="lazy">
+                                </a>
+                                {% elif msg.file_media_type == 'voice' %}
+                                <audio controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-audio"></audio>
+                                {% elif msg.file_media_type == 'video' %}
+                                <video controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-video"></video>
                                 {% else %}
-                                <div class="msg-bubble msg-file-bubble">
-                                    <div class="chat-file-card">
-                                        <span class="chat-file-icon">{% if msg.file_media_type == 'video' %}🎬{% else %}📄{% endif %}</span>
-                                        <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
-                                        <div class="chat-file-actions">
-                                            <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
-                                        </div>
+                                <div class="chat-file-card">
+                                    <span class="chat-file-icon">📄</span>
+                                    <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
+                                    <div class="chat-file-actions">
+                                        <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
                                     </div>
                                 </div>
                                 {% endif %}
+                                {% if msg.voice_transcription %}
+                                    <div class="voice-transcription">{{ msg.voice_transcription }}</div>
+                                {% endif %}
+                                {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' and not msg.content|startswith:"[FILE:" %}
+                                    <div class="voice-transcription">{{ msg.content|linebreaksbr }}</div>
+                                {% endif %}
+                                <div class="msg-meta-inline">
+                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
+                                </div>
+                            </div>
                             {% else %}
-                            <div class="msg-bubble">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
+                            <div class="msg-bubble">
+                                <div class="msg-text">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
+                                <div class="msg-meta-inline">
+                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
+                                </div>
+                            </div>
                             {% endif %}
-                            <div class="msg-meta">{{ msg.role|title }}{% if msg.sender %} · {{ msg.sender }}{% endif %}{% if msg.timestamp %} · {{ msg.timestamp|slice:":16" }}{% endif %}</div>
                         </div>
                         {% endfor %}
                     </div>
@@ -386,25 +393,148 @@
 .chat-ai-toggle { display: inline-flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .chat-ai-toggle .ai-status { font-size: 0.85rem; color: var(--text-secondary); }
 .ai-master-hint { font-size: 0.72rem; color: #f87171; font-style: italic; opacity: 0.9; }
-.chat-panel .chat-wrap { display: flex; flex-direction: column; gap: 1rem; }
-.chat-messages { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
-.chat-msg { display: flex; flex-direction: column; align-items: flex-start; }
-.chat-msg.assistant, .chat-msg.admin { align-items: flex-end; }
-.chat-msg .msg-bubble { max-width: 85%; padding: 0.5rem 0.75rem; border-radius: 12px; background: var(--bg-tertiary); }
-.chat-msg.user .msg-bubble { background: var(--accent-primary); color: #fff; }
-.chat-msg .msg-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
-.chat-send { display: flex; gap: 0.5rem; align-items: flex-end; }
+.chat-wrap-outer {
+    padding: 0;
+    max-height: 600px;
+    background-color: #E5DDD5;
+    background-image: url('data:image/svg+xml,%3Csvg width="20" height="20" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="%23d8cbbc" fill-opacity="0.4" fill-rule="evenodd"%3E%3Ccircle cx="3" cy="3" r="3"/%3E%3Ccircle cx="13" cy="13" r="3"/%3E%3C/g%3E%3C/svg%3E');
+}
+body[data-theme="dark"] .chat-wrap-outer {
+    background-color: #0e1621;
+    background-image: none;
+}
+.chat-messages.tg-style {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 1.5rem;
+    max-height: 450px;
+    overflow-y: auto;
+}
+.tg-style .chat-msg {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+    position: relative;
+    margin-bottom: 2px;
+}
+.tg-style .chat-msg.user {
+    align-self: flex-start;
+}
+.tg-style .chat-msg.assistant, .tg-style .chat-msg.admin {
+    align-self: flex-end;
+}
+.tg-style .msg-bubble {
+    padding: 6px 12px;
+    border-radius: 12px;
+    position: relative;
+    word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    display: inline-block;
+    min-width: 80px;
+}
+.tg-style .chat-msg.user .msg-bubble {
+    border-bottom-left-radius: 4px;
+}
+.tg-style .chat-msg.assistant .msg-bubble, .tg-style .chat-msg.admin .msg-bubble {
+    border-bottom-right-radius: 4px;
+}
+/* Bubble tails */
+.tg-style .chat-msg.user .msg-bubble::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: -6px;
+    width: 12px;
+    height: 12px;
+    background-color: inherit;
+    border-bottom-right-radius: 12px;
+    z-index: -1;
+}
+.tg-style .chat-msg.assistant .msg-bubble::after, .tg-style .chat-msg.admin .msg-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: -6px;
+    width: 12px;
+    height: 12px;
+    background-color: inherit;
+    border-bottom-left-radius: 12px;
+    z-index: -1;
+}
+.tg-style .msg-bubble::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.tg-style .msg-file-bubble {
+    padding: 4px;
+    padding-bottom: 6px;
+}
+/* Colors */
+body[data-theme="light"] .tg-style .chat-msg.user .msg-bubble {
+    background-color: #ffffff;
+    color: #000;
+}
+body[data-theme="light"] .tg-style .chat-msg.assistant .msg-bubble, body[data-theme="light"] .tg-style .chat-msg.admin .msg-bubble {
+    background-color: #e1ffc7;
+    color: #000;
+}
+body[data-theme="dark"] .tg-style .chat-msg.user .msg-bubble {
+    background-color: #182533;
+    color: #fff;
+}
+body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble, body[data-theme="dark"] .tg-style .chat-msg.admin .msg-bubble {
+    background-color: #2b5278;
+    color: #fff;
+}
+.chat-inline-photo, .chat-inline-video {
+    max-width: 100%;
+    max-height: 350px;
+    border-radius: 8px;
+    display: block;
+}
+.chat-inline-audio {
+    height: 40px;
+    width: 260px;
+    outline: none;
+    display: block;
+    margin: 4px;
+}
+.voice-transcription {
+    padding: 6px 8px;
+    font-style: italic;
+    opacity: 0.85;
+    font-size: 0.9rem;
+}
+.msg-text {
+    display: inline;
+}
+.msg-meta-inline {
+    float: right;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    margin-left: 12px;
+    margin-top: 6px;
+    position: relative;
+    bottom: -2px;
+    line-height: 1;
+    white-space: nowrap;
+}
+.msg-author {
+    font-weight: 500;
+    opacity: 0.9;
+}
+.chat-send { display: flex; gap: 0.5rem; align-items: flex-end; margin-top: 10px; }
 .chat-send textarea { flex: 1; resize: vertical; min-height: 44px; }
-.msg-file-bubble { padding: 0.5rem 0.75rem; }
 .chat-file-card { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .chat-file-icon { font-size: 1.25rem; }
 .chat-file-name { font-size: 0.9rem; word-break: break-all; }
 .chat-file-actions { display: flex; gap: 0.35rem; margin-left: auto; }
-.msg-voice-bubble { padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
-.voice-player { display: block; height: 36px; min-width: 220px; max-width: 100%; border-radius: 20px; outline: none; }
-.voice-transcript { font-size: 0.82rem; color: inherit; opacity: 0.85; font-style: italic; line-height: 1.4; padding-top: 0.2rem; border-top: 1px solid rgba(255,255,255,0.2); margin-top: 0.1rem; }
-.chat-msg.assistant .voice-transcript, .chat-msg.admin .voice-transcript { border-top-color: rgba(0,0,0,0.12); }
-.chat-inline-photo { display: block; max-width: 220px; max-height: 220px; border-radius: 10px; object-fit: cover; }
+
 .assign-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 .form-select-sm { padding: 0.35rem 0.5rem; font-size: 0.9rem; }
 .detail-main .panel-card { margin-bottom: 1.5rem; }
@@ -450,36 +580,35 @@
         const wrap = getChatContainer();
         if (!wrap) return;
         const ts = (timestamp || '').slice(0, 16);
-        const roleLabel = role === 'user' ? 'User' : (role === 'assistant' ? 'Assistant' : 'Admin');
+        const roleLabel = role === 'user' ? '' : (sender ? '<span class="msg-author">' + sender + '</span> · ' : '');
         let bubbleHtml;
         if (fileDoc && fileDoc.id) {
             const mt = fileDoc.media_type || '';
             const viewUrl = '/admin/files/' + fileDoc.id + '/view';
             if (mt === 'voice') {
-                bubbleHtml = '<div class="msg-bubble msg-voice-bubble">' +
-                    '<audio class="voice-player" controls preload="none" src="' + viewUrl + '">' +
-                    '<a href="' + viewUrl + '?download=1">Download audio</a></audio>' +
-                    '</div>';
+                bubbleHtml = '<div class="msg-bubble msg-file-bubble">' +
+                    '<audio class="chat-inline-audio" controls preload="none" src="' + viewUrl + '"></audio>' +
+                    '<div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
             } else if (mt === 'photo') {
                 bubbleHtml = '<div class="msg-bubble msg-file-bubble">' +
                     '<img src="' + viewUrl + '" class="chat-inline-photo" alt="photo">' +
-                    '</div>';
+                    '<div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
             } else {
                 const icon = (mt === 'video') ? '🎬' : '📄';
                 const fn = (fileDoc.filename || 'File').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 bubbleHtml = '<div class="msg-bubble msg-file-bubble"><div class="chat-file-card">' +
                     '<span class="chat-file-icon">' + icon + '</span><span class="chat-file-name">' + fn + '</span>' +
                     '<div class="chat-file-actions"><a href="' + viewUrl + '?download=1" class="btn btn-xs btn-outline">Download</a></div>' +
-                    '</div></div>';
+                    '</div><div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
             }
         } else {
             const text = (content || '—').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-            bubbleHtml = '<div class="msg-bubble">' + text + '</div>';
+            bubbleHtml = '<div class="msg-bubble"><div class="msg-text">' + text + '</div><div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
         }
         const div = document.createElement('div');
         div.className = 'chat-msg ' + role;
         div.setAttribute('data-timestamp', timestamp || '');
-        div.innerHTML = bubbleHtml + '<div class="msg-meta">' + roleLabel + (sender ? ' · ' + sender : '') + (ts ? ' · ' + ts : '') + '</div>';
+        div.innerHTML = bubbleHtml;
         wrap.appendChild(div);
         wrap.scrollTop = wrap.scrollHeight;
     }
@@ -669,14 +798,13 @@
                         let inner = '';
                         if (data.doc_id) {
                             const audioSrc = '/admin/files/' + data.doc_id + '/view';
-                            inner = '<div class="msg-bubble msg-voice-bubble">'
-                                + '<audio class="voice-player" controls preload="none" src="' + audioSrc + '">'
-                                + '<a href="' + audioSrc + '?download=1">Download audio</a></audio>'
-                                + '</div>';
+                            inner = '<div class="msg-bubble msg-file-bubble">'
+                                + '<audio class="chat-inline-audio" controls preload="none" src="' + audioSrc + '"></audio>'
+                                + '<div class="msg-meta-inline">' + (data.sender || 'Admin') + ' · just now</div></div>';
                         } else {
-                            inner = '<div class="msg-bubble">🎤 Voice message sent</div>';
+                            inner = '<div class="msg-bubble"><div class="msg-text">🎤 Voice message sent</div>'
+                                + '<div class="msg-meta-inline">' + (data.sender || 'Admin') + ' · just now</div></div>';
                         }
-                        inner += '<div class="msg-meta">' + (data.sender || 'Admin') + ' · just now</div>';
                         div.innerHTML = inner;
                         chatMsgs.appendChild(div);
                         chatMsgs.scrollTop = chatMsgs.scrollHeight;
