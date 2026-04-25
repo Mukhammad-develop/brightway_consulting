@@ -107,15 +107,18 @@
                                 {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' %}
                                     <div class="voice-transcription">{{ msg.content|linebreaksbr }}</div>
                                 {% endif %}
+                                <div class="msg-meta-inline">
+                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp }}
+                                </div>
                             </div>
                             {% else %}
-                            <div class="msg-bubble">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
-                            {% endif %}
-                            <div class="msg-meta">
-                                {{ msg.role|title }}
-                                {% if msg.sender %} &middot; {{ msg.sender }}{% endif %}
-                                {% if msg.timestamp %} &middot; {{ msg.timestamp }}{% endif %}
+                            <div class="msg-bubble">
+                                <div class="msg-text">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
+                                <div class="msg-meta-inline">
+                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp }}
+                                </div>
                             </div>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -241,7 +244,9 @@ body[data-theme="dark"] .chat-wrap-outer {
 .tg-style .chat-msg {
     display: flex;
     flex-direction: column;
-    max-width: 80%;
+    max-width: 85%;
+    position: relative;
+    margin-bottom: 2px;
 }
 .tg-style .chat-msg.user {
     align-self: flex-start;
@@ -250,37 +255,71 @@ body[data-theme="dark"] .chat-wrap-outer {
     align-self: flex-end;
 }
 .tg-style .msg-bubble {
-    padding: 8px 12px;
+    padding: 6px 12px;
     border-radius: 12px;
     position: relative;
     word-break: break-word;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
     font-size: 0.95rem;
     line-height: 1.4;
+    display: inline-block;
+    min-width: 80px;
 }
+.tg-style .chat-msg.user .msg-bubble {
+    border-bottom-left-radius: 4px;
+}
+.tg-style .chat-msg.assistant .msg-bubble {
+    border-bottom-right-radius: 4px;
+}
+/* Bubble tails (optional subtle curve) */
+.tg-style .chat-msg.user .msg-bubble::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: -6px;
+    width: 12px;
+    height: 12px;
+    background-color: inherit;
+    border-bottom-right-radius: 12px;
+    z-index: -1;
+}
+.tg-style .chat-msg.assistant .msg-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: -6px;
+    width: 12px;
+    height: 12px;
+    background-color: inherit;
+    border-bottom-left-radius: 12px;
+    z-index: -1;
+}
+.tg-style .msg-bubble::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
 .tg-style .msg-file-bubble {
     padding: 4px;
+    padding-bottom: 6px;
 }
 /* Colors */
 body[data-theme="light"] .tg-style .chat-msg.user .msg-bubble {
     background-color: #ffffff;
     color: #000;
-    border-bottom-left-radius: 2px;
 }
 body[data-theme="light"] .tg-style .chat-msg.assistant .msg-bubble {
-    background-color: #dcf8c6;
+    background-color: #e1ffc7;
     color: #000;
-    border-bottom-right-radius: 2px;
 }
 body[data-theme="dark"] .tg-style .chat-msg.user .msg-bubble {
     background-color: #182533;
     color: #fff;
-    border-bottom-left-radius: 2px;
 }
 body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble {
     background-color: #2b5278;
     color: #fff;
-    border-bottom-right-radius: 2px;
 }
 .chat-inline-photo, .chat-inline-video {
     max-width: 100%;
@@ -301,14 +340,23 @@ body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble {
     opacity: 0.85;
     font-size: 0.9rem;
 }
-.tg-style .msg-meta {
+.msg-text {
+    display: inline;
+}
+.msg-meta-inline {
+    float: right;
     font-size: 0.7rem;
     opacity: 0.6;
-    margin-top: 4px;
-    align-self: flex-end;
+    margin-left: 12px;
+    margin-top: 6px;
+    position: relative;
+    bottom: -2px;
+    line-height: 1;
+    white-space: nowrap;
 }
-.tg-style .chat-msg.user .msg-meta {
-    align-self: flex-start;
+.msg-author {
+    font-weight: 500;
+    opacity: 0.9;
 }
 </style>
 <script>
