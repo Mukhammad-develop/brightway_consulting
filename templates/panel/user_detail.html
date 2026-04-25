@@ -281,7 +281,6 @@
                 </div>
             </div>
         </div>
-        </div>
     </div>
     
     <!-- Main Chat Area -->
@@ -643,17 +642,20 @@ body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble, body[data-the
     right: -420px;
     width: 400px;
     height: 100vh;
+    max-height: 100vh;
     background: var(--bg-primary);
     box-shadow: -5px 0 25px rgba(0,0,0,0.15);
     transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 2000;
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* clip children */
 }
 .tg-right-sidebar.open {
     right: 0;
 }
 .tg-sidebar-close {
+    flex-shrink: 0;
     position: absolute;
     top: 15px;
     left: 15px;
@@ -672,13 +674,16 @@ body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble, body[data-the
 }
 .tg-sidebar-close:hover { background: rgba(0,0,0,0.7); }
 .tg-sidebar-scroll {
+    flex: 1;
+    min-height: 0;       /* KEY: allows flex child to shrink and scroll */
     overflow-y: auto;
-    padding: 24px;
-    padding-top: 60px; /* space for close btn */
+    overflow-x: hidden;
+    overscroll-behavior: contain; /* stop scroll chaining to background */
+    padding: 16px;
+    padding-top: 56px;   /* space for close btn */
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    flex: 1;
+    gap: 16px;
 }
 .tg-profile-overlay {
     position: fixed;
@@ -688,10 +693,12 @@ body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble, body[data-the
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.3s ease;
+    pointer-events: none;
 }
 .tg-profile-overlay.show {
     opacity: 1;
     visibility: visible;
+    pointer-events: all;
 }
 .chat-wrap-outer { flex: 1; max-height: none; }
 body.sidebar-open { overflow: hidden; }
