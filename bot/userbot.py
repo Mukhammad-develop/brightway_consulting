@@ -641,9 +641,11 @@ def register_handlers(client: TelegramClient, account_index: int):
 
             # ── AI-disabled check ─────────────────────────────────────────────
             # If a consultant has taken over (ai_enabled=False on the case),
-            # stay completely silent so the consultant can chat freely.
+            # stay completely silent so the consultant can chat freely, but LOG the message.
             if await run_sync(lambda: _check_ai_disabled(sender.id)):
-                logger.debug('[Account %s] AI disabled for %s — skipping', account_index, sender.id)
+                case = await run_sync(lambda: _get_or_open_case(user))
+                await run_sync(lambda: case.add_message('user', text))
+                logger.debug('[Account %s] AI disabled for %s — skipping bot logic but logged', account_index, sender.id)
                 return
 
             state = get_state(uid)
@@ -803,7 +805,46 @@ def register_handlers(client: TelegramClient, account_index: int):
 
             # ── AI-disabled check ─────────────────────────────────────────────
             if await run_sync(lambda: _check_ai_disabled(sender.id)):
-                logger.debug('[Account %s] AI disabled for %s (media) — skipping', account_index, sender.id)
+                case = await run_sync(lambda: _get_or_open_case(user))
+                unique_id = str(uuid4())[:8]
+                if isinstance(event.media, MessageMediaPhoto):
+                    ext, media_type = '.jpg', 'photo'
+                elif isinstance(event.media, MessageMediaDocument):
+                    doc_tl = event.media.document
+                    mime = doc_tl.mime_type or ''
+                    ext = '.bin'
+                    for attr in (doc_tl.attributes or []):
+                        if hasattr(attr, 'file_name') and attr.file_name:
+                            ext = os.path.splitext(attr.file_name)[1] or '.bin'
+                            break
+                    if mime.startswith('audio/') or any(getattr(a, 'voice', False) for a in (doc_tl.attributes or [])):
+                        ext = ext if ext != '.bin' else '.ogg'
+                        media_type = 'voice'
+                    elif mime.startswith('video/') or ext.lower() in ('.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'):
+                        media_type = 'video'
+                    else:
+                        media_type = 'document'
+                else:
+                    return
+
+                filename = f'{unique_id}{ext}'
+                filepath = UPLOADS_DIR / filename
+                await client.download_media(event.media, filepath)
+
+                def _save_doc_disabled():
+                    from core.models import Document
+                    doc = _create_document(case.pk, filename, ext.lstrip('.') or 'unknown', unique_id, media_type, display_name=f'{media_type}_{sender.id}{ext}')
+                    if media_type == 'voice' and ext.lower() == '.ogg':
+                        transcription = transcribe_voice(str(filepath), getattr(user, 'language_code', 'en') or 'en')
+                        if transcription:
+                            doc.transcription = transcription
+                            doc.save(update_fields=['transcription'])
+                            case.add_message('user', f'[Voice note transcription]: {transcription}')
+                            return
+                    case.add_message('user', f'[FILE:{unique_id}:{filename}:{media_type}]')
+
+                await run_sync(_save_doc_disabled)
+                logger.debug('[Account %s] AI disabled for %s (media) — skipping bot logic but logged', account_index, sender.id)
                 return
 
             state = get_state(uid)
@@ -920,6 +961,72 @@ def register_handlers(client: TelegramClient, account_index: int):
             logger.info(f"[Account {account_index}] Media from {sender.id}: {filename}")
         except Exception as e:
             logger.error(f"Error handling media: {e}")
+
+    # ── Outgoing messages (Admin replies from Telegram App) ────────────────────
+
+    @client.on(events.NewMessage(outgoing=True))
+    async def handle_outgoing_message(event):
+        if not event.is_private:
+            return
+        try:
+            peer = await event.get_chat()
+            if not peer or not hasattr(peer, 'id'): return
+            peer_id = peer.id
+
+            # Only process if this user exists in our DB
+            if not await run_sync(lambda: __user_exists_by_telegram_id(peer_id)):
+                return
+
+            # Only log if AI is disabled (meaning consultant has taken over)
+            # This avoids double-logging messages sent by the bot script itself.
+            if not await run_sync(lambda: _check_ai_disabled(peer_id)):
+                return
+
+            user, _ = await run_sync(lambda: _get_or_create_user(peer_id))
+            case = await run_sync(lambda: _get_or_open_case(user))
+
+            if event.media:
+                unique_id = str(uuid4())[:8]
+                if isinstance(event.media, MessageMediaPhoto):
+                    ext, media_type = '.jpg', 'photo'
+                elif isinstance(event.media, MessageMediaDocument):
+                    doc_tl = event.media.document
+                    mime = doc_tl.mime_type or ''
+                    ext = '.bin'
+                    for attr in (doc_tl.attributes or []):
+                        if hasattr(attr, 'file_name') and attr.file_name:
+                            ext = os.path.splitext(attr.file_name)[1] or '.bin'
+                            break
+                    if mime.startswith('audio/') or any(getattr(a, 'voice', False) for a in (doc_tl.attributes or [])):
+                        ext = ext if ext != '.bin' else '.ogg'
+                        media_type = 'voice'
+                    elif mime.startswith('video/') or ext.lower() in ('.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'):
+                        media_type = 'video'
+                    else:
+                        media_type = 'document'
+                else:
+                    return
+
+                filename = f'{unique_id}{ext}'
+                filepath = UPLOADS_DIR / filename
+                await client.download_media(event.media, filepath)
+
+                def _save_outgoing_doc():
+                    from core.models import Document
+                    _create_document(case.pk, filename, ext.lstrip('.') or 'unknown', unique_id, media_type, display_name=f'{media_type}_{peer_id}_out{ext}')
+                    # We log it as assistant because the consultant sent it
+                    case.add_message('assistant', f'[FILE:{unique_id}:{filename}:{media_type}]')
+
+                await run_sync(_save_outgoing_doc)
+                logger.info(f"[Account {account_index}] Logged outgoing media to {peer_id}: {filename}")
+            else:
+                text = event.text or ''
+                if text:
+                    await run_sync(lambda: case.add_message('assistant', text))
+                    logger.info(f"[Account {account_index}] Logged outgoing text to {peer_id}: {text[:50]}")
+        except Exception as e:
+            logger.error(f"Error handling outgoing message: {e}")
+
 
 
 # ============== Group Chat Monitoring ==============

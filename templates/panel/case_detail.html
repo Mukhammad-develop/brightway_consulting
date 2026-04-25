@@ -80,23 +80,33 @@
                 <div class="card-header">
                     <h3>Conversation History ({{ conversation|length }} messages)</h3>
                 </div>
-                <div class="card-body chat-wrap">
+                <div class="card-body chat-wrap-outer">
                     {% if conversation %}
-                    <div class="chat-messages">
+                    <div class="chat-messages tg-style" id="chatMessages">
                         {% for msg in conversation %}
                         <div class="chat-msg {{ msg.role }}">
                             {% if msg.file_info %}
                             <div class="msg-bubble msg-file-bubble">
+                                {% if msg.file_media_type == 'photo' %}
+                                <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank">
+                                    <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="Photo" loading="lazy">
+                                </a>
+                                {% elif msg.file_media_type == 'voice' %}
+                                <audio controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-audio"></audio>
+                                {% elif msg.file_media_type == 'video' %}
+                                <video controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-video"></video>
+                                {% else %}
                                 <div class="chat-file-card">
-                                    <span class="chat-file-icon">{% if msg.file_media_type == 'photo' %}🖼️{% elif msg.file_media_type == 'voice' %}🎤{% elif msg.file_media_type == 'video' %}🎬{% else %}📄{% endif %}</span>
+                                    <span class="chat-file-icon">📄</span>
                                     <span class="chat-file-name">{{ msg.file_filename|default:"File" }}</span>
                                     <div class="chat-file-actions">
-                                        {% if msg.file_media_type == 'photo' or msg.file_media_type == 'voice' or msg.file_media_type == 'video' %}
-                                        <a href="{% url 'panel:file_view' msg.file_info.id %}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">View</a>
-                                        {% endif %}
                                         <a href="{% url 'panel:file_view' msg.file_info.id %}?download=1" class="btn btn-xs btn-outline">Download</a>
                                     </div>
                                 </div>
+                                {% endif %}
+                                {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' %}
+                                    <div class="voice-transcription">{{ msg.content|linebreaksbr }}</div>
+                                {% endif %}
                             </div>
                             {% else %}
                             <div class="msg-bubble">{% if msg.content %}{{ msg.content|linebreaksbr }}{% else %}<em>—</em>{% endif %}</div>
@@ -209,6 +219,97 @@
 .detail-sidebar .panel-card { margin-bottom: 1.5rem; }
 .detail-sidebar .panel-card:last-child { margin-bottom: 0; }
 .info-item .btn { margin-left: 0.5rem; }
+
+/* Telegram-like Chat Styles */
+.chat-wrap-outer {
+    padding: 0;
+    max-height: 600px;
+    overflow-y: auto;
+    background-color: #E5DDD5;
+    background-image: url('data:image/svg+xml,%3Csvg width="20" height="20" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="%23d8cbbc" fill-opacity="0.4" fill-rule="evenodd"%3E%3Ccircle cx="3" cy="3" r="3"/%3E%3Ccircle cx="13" cy="13" r="3"/%3E%3C/g%3E%3C/svg%3E');
+}
+body[data-theme="dark"] .chat-wrap-outer {
+    background-color: #0e1621;
+    background-image: none;
+}
+.chat-messages.tg-style {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 1.5rem;
+}
+.tg-style .chat-msg {
+    display: flex;
+    flex-direction: column;
+    max-width: 80%;
+}
+.tg-style .chat-msg.user {
+    align-self: flex-start;
+}
+.tg-style .chat-msg.assistant {
+    align-self: flex-end;
+}
+.tg-style .msg-bubble {
+    padding: 8px 12px;
+    border-radius: 12px;
+    position: relative;
+    word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+.tg-style .msg-file-bubble {
+    padding: 4px;
+}
+/* Colors */
+body[data-theme="light"] .tg-style .chat-msg.user .msg-bubble {
+    background-color: #ffffff;
+    color: #000;
+    border-bottom-left-radius: 2px;
+}
+body[data-theme="light"] .tg-style .chat-msg.assistant .msg-bubble {
+    background-color: #dcf8c6;
+    color: #000;
+    border-bottom-right-radius: 2px;
+}
+body[data-theme="dark"] .tg-style .chat-msg.user .msg-bubble {
+    background-color: #182533;
+    color: #fff;
+    border-bottom-left-radius: 2px;
+}
+body[data-theme="dark"] .tg-style .chat-msg.assistant .msg-bubble {
+    background-color: #2b5278;
+    color: #fff;
+    border-bottom-right-radius: 2px;
+}
+.chat-inline-photo, .chat-inline-video {
+    max-width: 100%;
+    max-height: 350px;
+    border-radius: 8px;
+    display: block;
+}
+.chat-inline-audio {
+    height: 40px;
+    width: 260px;
+    outline: none;
+    display: block;
+    margin: 4px;
+}
+.voice-transcription {
+    padding: 6px 8px;
+    font-style: italic;
+    opacity: 0.85;
+    font-size: 0.9rem;
+}
+.tg-style .msg-meta {
+    font-size: 0.7rem;
+    opacity: 0.6;
+    margin-top: 4px;
+    align-self: flex-end;
+}
+.tg-style .chat-msg.user .msg-meta {
+    align-self: flex-start;
+}
 </style>
 <script>
 document.getElementById('caseAiToggleBtn')?.addEventListener('click', function() {
@@ -228,6 +329,14 @@ document.getElementById('caseAiToggleBtn')?.addEventListener('click', function()
             if (wrap) { wrap.classList.remove('ai-state-on', 'ai-state-off'); wrap.classList.add(data.ai_enabled ? 'ai-state-on' : 'ai-state-off'); }
         } else alert(data.error || 'Failed to toggle');
     }).catch(function() { alert('Request failed'); }).finally(function() { btn.disabled = false; });
+});
+
+// Auto-scroll chat to bottom
+document.addEventListener('DOMContentLoaded', function() {
+    var chatMessages = document.getElementById('chatMessages');
+    if (chatMessages && chatMessages.parentElement) {
+        chatMessages.parentElement.scrollTop = chatMessages.parentElement.scrollHeight;
+    }
 });
 </script>
 {% endblock %}
