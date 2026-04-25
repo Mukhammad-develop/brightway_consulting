@@ -28,6 +28,7 @@ urlpatterns = [
     path('admin/users/<int:user_id>/reassign', users.user_reassign, name='user_reassign'),
     path('admin/users/<int:user_id>/fix-chat', users.user_fix_chat, name='user_fix_chat'),
     path('admin/users/<int:user_id>/send-voice', users.send_voice_message, name='send_voice'),
+    path('admin/users/<int:user_id>/send-file', users.send_file_message, name='send_file'),
     
     # User Messaging (Bot Integration)
     path('admin/users/<int:user_id>/send', users.send_message, name='send_message'),

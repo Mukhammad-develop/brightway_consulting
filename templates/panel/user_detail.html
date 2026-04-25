@@ -375,7 +375,12 @@
                     {% endif %}
                     <form class="chat-send" id="chatSendForm" onsubmit="return false;">
                         {% csrf_token %}
+                        <!-- Hidden file input -->
+                        <input type="file" id="fileAttachInput" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" style="display:none">
                         <div class="chat-send-inner">
+                            <button type="button" class="attach-btn" id="attachBtn" title="Send file, photo or video">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                            </button>
                             <textarea id="chatInput" rows="1" placeholder="Write a message…"></textarea>
                         </div>
                         <button type="button" class="btn btn-primary" id="chatSendBtn" title="Send">
@@ -518,10 +523,92 @@ body[data-theme="dark"] .chat-messages.tg-style::-webkit-scrollbar-thumb { backg
     content: ""; display: table; clear: both;
 }
 
-/* ── File bubbles ── */
+/* ── Voice / file bubble fix ── */
 .tg-style .msg-file-bubble {
-    padding: 4px;
-    padding-bottom: 6px;
+    padding: 6px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.chat-voice-player {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 180px;
+}
+.voice-play-icon {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: #5aadde;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.voice-play-icon svg { fill: white; width: 12px; height: 12px; margin-left: 2px; }
+.voice-progress-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.voice-progress-bar {
+    width: 100%; height: 3px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+}
+.voice-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: #5aadde;
+    border-radius: 2px;
+    transition: width 0.1s linear;
+}
+.voice-duration-label {
+    font-size: 0.7rem;
+    opacity: 0.6;
+}
+/* Attach button */
+.attach-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.4);
+    cursor: pointer;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+body[data-theme="light"] .attach-btn { color: rgba(0,0,0,0.3); }
+.attach-btn:hover { color: var(--primary-color); }
+/* File attachment preview in input area */
+.file-preview-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.file-preview-bar .file-preview-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.file-preview-bar button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0 4px;
 }
 
 /* ── Bubble colours ── */
@@ -870,17 +957,28 @@ body.sidebar-open { overflow: hidden; }
             const viewUrl = '/admin/files/' + fileDoc.id + '/view';
             if (mt === 'voice') {
                 bubbleHtml = '<div class="msg-bubble msg-file-bubble">' +
-                    '<audio class="chat-inline-audio" controls preload="none" src="' + viewUrl + '"></audio>' +
+                    '<div class="chat-voice-player" data-audio-src="' + viewUrl + '">' +
+                    '  <div class="voice-play-icon" onclick="toggleVoicePlay(this)">' +
+                    '    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>' +
+                    '  </div>' +
+                    '  <div class="voice-progress-wrap">' +
+                    '    <div class="voice-progress-bar"><div class="voice-progress-fill"></div></div>' +
+                    '    <span class="voice-duration-label">0:00</span>' +
+                    '  </div>' +
+                    '</div>' +
                     '<div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
             } else if (mt === 'photo') {
                 bubbleHtml = '<div class="msg-bubble msg-file-bubble">' +
-                    '<img src="' + viewUrl + '" class="chat-inline-photo" alt="photo">' +
+                    '<a href="' + viewUrl + '" target="_blank"><img src="' + viewUrl + '" class="chat-inline-photo" alt="photo" loading="lazy"></a>' +
+                    '<div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
+            } else if (mt === 'video') {
+                bubbleHtml = '<div class="msg-bubble msg-file-bubble">' +
+                    '<video controls src="' + viewUrl + '" class="chat-inline-video"></video>' +
                     '<div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
             } else {
-                const icon = (mt === 'video') ? '🎬' : '📄';
                 const fn = (fileDoc.filename || 'File').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 bubbleHtml = '<div class="msg-bubble msg-file-bubble"><div class="chat-file-card">' +
-                    '<span class="chat-file-icon">' + icon + '</span><span class="chat-file-name">' + fn + '</span>' +
+                    '<span class="chat-file-icon">📄</span><span class="chat-file-name">' + fn + '</span>' +
                     '<div class="chat-file-actions"><a href="' + viewUrl + '?download=1" class="btn btn-xs btn-outline">Download</a></div>' +
                     '</div><div class="msg-meta-inline">' + roleLabel + ts + '</div></div>';
             }
@@ -1141,6 +1239,147 @@ function toggleUserProfile() {
         sidebar.classList.add('open');
         overlay.classList.add('show');
         document.body.classList.add('sidebar-open');
+    }
+}
+</script>
+
+<script>
+// ── File attachment ──
+(function () {
+    const fileInput  = document.getElementById('fileAttachInput');
+    const attachBtn  = document.getElementById('attachBtn');
+    const csrfToken  = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    const fileUrl    = "{% url 'panel:send_file' user_id=user_obj.pk %}";
+
+    if (!attachBtn || !fileInput) return;
+
+    let selectedFile = null;
+    let previewBar   = null;
+
+    attachBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', function () {
+        selectedFile = fileInput.files[0];
+        if (!selectedFile) return;
+        showPreviewBar(selectedFile.name);
+    });
+
+    function showPreviewBar(name) {
+        removePreviewBar();
+        const chatWrap = document.getElementById('chatSendForm');
+        previewBar = document.createElement('div');
+        previewBar.className = 'file-preview-bar';
+        previewBar.innerHTML =
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>' +
+            '<span class="file-preview-name">' + name.replace(/</g,'&lt;') + '</span>' +
+            '<button onclick="window._cancelFileAttach()" title="Remove">&times;</button>';
+        chatWrap.parentNode.insertBefore(previewBar, chatWrap);
+    }
+
+    window._cancelFileAttach = function () {
+        removePreviewBar(); selectedFile = null; fileInput.value = '';
+    };
+    function removePreviewBar() {
+        if (previewBar) { previewBar.remove(); previewBar = null; }
+    }
+
+    // Capture send button in capture phase — fires before the text-send listener
+    document.getElementById('chatSendBtn')?.addEventListener('click', function (e) {
+        if (!selectedFile) return;
+        e.stopImmediatePropagation();
+        const form = new FormData();
+        form.append('file', selectedFile);
+        form.append('csrfmiddlewaretoken', csrfToken);
+        this.disabled = true;
+        fetch(fileUrl, { method: 'POST', body: form })
+            .then(r => r.json())
+            .then(function (data) {
+                if (data.ok) {
+                    removePreviewBar(); selectedFile = null; fileInput.value = '';
+                    const ts = data.timestamp || new Date().toISOString();
+                    const sender = data.sender || 'Admin';
+                    const mt = data.media_type || 'document';
+                    const fn = data.filename || 'File';
+                    const viewUrl = '/admin/files/' + data.doc_id + '/view';
+                    let bHtml;
+                    if (mt === 'photo') {
+                        bHtml = '<div class="msg-bubble msg-file-bubble"><a href="'+viewUrl+'" target="_blank"><img src="'+viewUrl+'" class="chat-inline-photo" alt="photo" loading="lazy"></a><div class="msg-meta-inline"><span class="msg-author">'+sender+'</span> · '+ts.slice(0,16)+'</div></div>';
+                    } else if (mt === 'video') {
+                        bHtml = '<div class="msg-bubble msg-file-bubble"><video controls src="'+viewUrl+'" class="chat-inline-video"></video><div class="msg-meta-inline"><span class="msg-author">'+sender+'</span> · '+ts.slice(0,16)+'</div></div>';
+                    } else {
+                        bHtml = '<div class="msg-bubble msg-file-bubble"><div class="chat-file-card"><span class="chat-file-icon">📄</span><span class="chat-file-name">'+fn+'</span><div class="chat-file-actions"><a href="'+viewUrl+'?download=1" class="btn btn-xs btn-outline">Download</a></div></div><div class="msg-meta-inline"><span class="msg-author">'+sender+'</span> · '+ts.slice(0,16)+'</div></div>';
+                    }
+                    const div = document.createElement('div');
+                    div.className = 'chat-msg admin';
+                    div.setAttribute('data-timestamp', ts);
+                    div.innerHTML = bHtml;
+                    const msgs = document.getElementById('chatMessages');
+                    if (msgs) { msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight; }
+                } else {
+                    alert('Failed to send: ' + (data.error || 'unknown'));
+                }
+            })
+            .catch(err => alert('Network error: ' + err.message))
+            .finally(() => { this.disabled = false; });
+    }, true);
+
+    // Auto-grow textarea + Enter to send
+    const ta = document.getElementById('chatInput');
+    if (ta) {
+        ta.addEventListener('input', function () {
+            ta.style.height = 'auto';
+            ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+        });
+        ta.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('chatSendBtn')?.click();
+            }
+        });
+    }
+})();
+
+// ── Voice bubble player ──
+function toggleVoicePlay(btn) {
+    const player = btn.closest('.chat-voice-player');
+    const src    = player.getAttribute('data-audio-src');
+    let audio    = player._audio;
+
+    if (!audio) {
+        audio = new Audio(src);
+        player._audio = audio;
+        const fill  = player.querySelector('.voice-progress-fill');
+        const label = player.querySelector('.voice-duration-label');
+
+        audio.addEventListener('loadedmetadata', function () {
+            const dur = Math.floor(audio.duration);
+            label.textContent = Math.floor(dur/60)+':'+String(dur%60).padStart(2,'0');
+        });
+        audio.addEventListener('timeupdate', function () {
+            if (audio.duration) {
+                fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+                const s = Math.floor(audio.currentTime);
+                label.textContent = Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+            }
+        });
+        audio.addEventListener('ended', function () {
+            fill.style.width = '0%';
+            btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        });
+        player.querySelector('.voice-progress-bar')?.addEventListener('click', function (e) {
+            if (audio.duration) {
+                const rect = this.getBoundingClientRect();
+                audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+            }
+        });
+    }
+
+    if (audio.paused) {
+        audio.play();
+        btn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+    } else {
+        audio.pause();
+        btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
     }
 }
 </script>

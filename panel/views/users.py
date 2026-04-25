@@ -674,6 +674,85 @@ def send_voice_message(request, user_id):
 
 
 @login_required
+@require_POST
+def send_file_message(request, user_id):
+    """
+    Accept a file upload (photo / video / document) from the admin panel,
+    save it, create a Document record, queue PendingSend for Telegram delivery,
+    and log it to the active case conversation.
+    """
+    from core.models import PendingSend, Document
+    import uuid, os, mimetypes
+    from django.conf import settings
+    from datetime import datetime
+
+    user = get_object_or_404(TgUser, pk=user_id)
+    if not _consultant_can_access_user(request, user):
+        return JsonResponse({'ok': False, 'error': 'Access denied.'}, status=403)
+
+    uploaded = request.FILES.get('file')
+    if not uploaded:
+        return JsonResponse({'ok': False, 'error': 'No file provided.'})
+
+    sender_name = request.session.get('admin_display', 'Admin')
+    account_index = user.linked_account or 0
+
+    # Determine media type
+    mime = (uploaded.content_type or mimetypes.guess_type(uploaded.name)[0] or '').lower()
+    if mime.startswith('image/'):
+        media_type = 'photo'
+    elif mime.startswith('video/'):
+        media_type = 'video'
+    else:
+        media_type = 'document'
+
+    ext = os.path.splitext(uploaded.name)[1] or mimetypes.guess_extension(mime) or ''
+    doc_uid = uuid.uuid4().hex
+    filename = f"admin_{media_type}_{doc_uid}{ext}"
+
+    media_root = getattr(settings, 'MEDIA_ROOT', 'uploads')
+    os.makedirs(media_root, exist_ok=True)
+    file_path = os.path.join(media_root, filename)
+    file_bytes = uploaded.read()
+    with open(file_path, 'wb') as f:
+        f.write(file_bytes)
+
+    # Queue for Telegram delivery
+    from django.core.files.base import ContentFile
+    pending = PendingSend(
+        user_tg_id=str(user.telegram_id),
+        message='',
+        sender_name=sender_name,
+        account_index=account_index,
+        send_type=PendingSend.SEND_TYPE_VOICE,  # reuse voice field for now; userbot checks media_type
+    )
+    pending.voice_file.save(filename, ContentFile(file_bytes), save=True)
+
+    # Create Document record
+    active_case = Case.objects.filter(user=user, status='active').first()
+    doc = None
+    if active_case:
+        doc = Document.objects.create(
+            case=active_case,
+            file_path=filename,
+            display_name=uploaded.name,
+            telegram_file_id=f'local:{filename}',
+            file_unique_id=doc_uid,
+            media_type=media_type,
+        )
+        active_case.add_message('admin', f'[FILE:{doc_uid}:{filename}:{media_type}]', sender_name)
+
+    return JsonResponse({
+        'ok': True,
+        'timestamp': datetime.now().isoformat(),
+        'sender': sender_name,
+        'doc_id': doc.pk if doc else None,
+        'media_type': media_type,
+        'filename': uploaded.name,
+    })
+
+
+@login_required
 def poll_messages(request, user_id):
     """
     Poll for new messages since a given timestamp.
