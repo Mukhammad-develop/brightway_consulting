@@ -523,41 +523,50 @@ body[data-theme="dark"] .chat-messages.tg-style::-webkit-scrollbar-thumb { backg
     content: ""; display: table; clear: both;
 }
 
-/* ── Voice / file bubble fix ── */
+/* ── Voice / file bubble ── */
 .tg-style .msg-file-bubble {
-    padding: 6px 10px;
-    display: flex;
+    padding: 8px 12px 6px;
+    display: inline-flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    /* override the display:inline-block from .msg-bubble */
+    display: flex !important;
 }
+/* Voice player row */
 .chat-voice-player {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-width: 180px;
+    gap: 10px;
+    width: 220px;
+    max-width: 100%;
 }
 .voice-play-icon {
-    width: 34px; height: 34px;
+    width: 36px; height: 36px;
     border-radius: 50%;
     background: #5aadde;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
     cursor: pointer;
+    transition: background 0.15s;
 }
-.voice-play-icon svg { fill: white; width: 12px; height: 12px; margin-left: 2px; }
+.voice-play-icon:hover { background: #4a9bc4; }
+.voice-play-icon svg { fill: white; width: 13px; height: 13px; margin-left: 2px; }
 .voice-progress-wrap {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
 }
 .voice-progress-bar {
     width: 100%; height: 3px;
     background: rgba(255,255,255,0.2);
     border-radius: 2px;
     cursor: pointer;
-    position: relative;
 }
+body[data-theme="light"] .voice-progress-bar { background: rgba(0,0,0,0.15); }
 .voice-progress-fill {
     height: 100%;
     width: 0%;
@@ -566,9 +575,36 @@ body[data-theme="dark"] .chat-messages.tg-style::-webkit-scrollbar-thumb { backg
     transition: width 0.1s linear;
 }
 .voice-duration-label {
-    font-size: 0.7rem;
-    opacity: 0.6;
+    font-size: 0.72rem;
+    opacity: 0.65;
+    line-height: 1;
 }
+/* File card inside bubble */
+.chat-file-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    max-width: 260px;
+}
+.chat-file-icon { font-size: 1.4rem; flex-shrink: 0; }
+.chat-file-name {
+    font-size: 0.88rem;
+    font-weight: 500;
+    word-break: break-all;
+    flex: 1;
+    min-width: 0;
+}
+.chat-file-actions { flex-shrink: 0; }
+/* Photo / video in bubble */
+.chat-inline-photo, .chat-inline-video {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 12px;
+    display: block;
+}
+/* fix clearfix conflict for file bubbles */
+.tg-style .msg-file-bubble::after { display: none; }
 /* Attach button */
 .attach-btn {
     background: transparent;
@@ -1171,20 +1207,32 @@ body.sidebar-open { overflow: hidden; }
                 const resp = await fetch(voiceUrl, { method: 'POST', body: form });
                 const data = await resp.json();
                 if (data.ok) {
-                    // Show an audio player bubble immediately
                     const chatMsgs = document.getElementById('chatMessages');
                     if (chatMsgs) {
                         const div = document.createElement('div');
                         div.className = 'chat-msg admin';
-                        let inner = '';
+                        // Stamp with server timestamp so the poller skips this message
+                        const ts = data.timestamp || new Date().toISOString();
+                        div.setAttribute('data-timestamp', ts);
+                        const sender = data.sender || 'Admin';
+                        const tsShort = ts.slice(0, 16);
+                        let inner;
                         if (data.doc_id) {
                             const audioSrc = '/admin/files/' + data.doc_id + '/view';
                             inner = '<div class="msg-bubble msg-file-bubble">'
-                                + '<audio class="chat-inline-audio" controls preload="none" src="' + audioSrc + '"></audio>'
-                                + '<div class="msg-meta-inline">' + (data.sender || 'Admin') + ' · just now</div></div>';
+                                + '<div class="chat-voice-player" data-audio-src="' + audioSrc + '">'
+                                + '  <div class="voice-play-icon" onclick="toggleVoicePlay(this)">'
+                                + '    <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'
+                                + '  </div>'
+                                + '  <div class="voice-progress-wrap">'
+                                + '    <div class="voice-progress-bar"><div class="voice-progress-fill"></div></div>'
+                                + '    <span class="voice-duration-label">0:00</span>'
+                                + '  </div>'
+                                + '</div>'
+                                + '<div class="msg-meta-inline"><span class="msg-author">' + sender + '</span> · ' + tsShort + '</div></div>';
                         } else {
                             inner = '<div class="msg-bubble"><div class="msg-text">🎤 Voice message sent</div>'
-                                + '<div class="msg-meta-inline">' + (data.sender || 'Admin') + ' · just now</div></div>';
+                                + '<div class="msg-meta-inline"><span class="msg-author">' + sender + '</span> · ' + tsShort + '</div></div>';
                         }
                         div.innerHTML = inner;
                         chatMsgs.appendChild(div);
