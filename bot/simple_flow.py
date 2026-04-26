@@ -277,7 +277,7 @@ def ai_match_service(text: str, services: list, lang: str) -> int | None:
 _DONE_KEYWORDS = {
     'en': {'done', 'ready', "that's all", 'thats all', 'finished', 'complete', 'completed', 'sent', 'all done'},
     'ru': {'готово', 'всё', 'все', 'готов', 'готова', 'закончил', 'закончила', 'отправил', 'отправила'},
-    'uz': {'bitti', 'tayyor', 'tamom', 'bajarildi', 'yubordim', 'hammasi'},
+    'uz': {'bitti', 'tayyor', 'tamom', 'bajarildi', 'yubordim', 'hammasi', 'tashlab boldim'},
 }
 
 
@@ -610,7 +610,7 @@ def build_collect_prompt(lang: str, service_def, items: list) -> str:
     hint = {
         'en': "\n\nWhen you have sent everything, reply Done.",
         'ru': '\n\nКогда всё отправите, напишите Готово.',
-        'uz': "\n\nHammani yuborganingizdan so'ng, Bitti deb yozing.",
+        'uz': "\n\nHammani yuborganingizdan so'ng, Bitti yoki tashlab boldim deb yozing.",
     }.get(lang, '')
     return f'{intro}\n\n{numbered}{hint}'
 
@@ -677,7 +677,7 @@ def build_ack(lang: str) -> str:
     return {
         'en': '✅ Received. Keep sending the remaining files or information. When you have sent everything, write Done.',
         'ru': '✅ Получено. Продолжайте отправлять оставшиеся файлы или информацию. Когда всё отправите, напишите Готово.',
-        'uz': "✅ Qabul qilindi. Qolgan fayllar yoki ma'lumotlarni yuborishda davom eting. Hammasini yuborganingizdan so'ng, Bitti deb yozing.",
+        'uz': "✅ Qabul qilindi. Qolgan fayllar yoki ma'lumotlarni yuborishda davom eting. Hammasini yuborganingizdan so'ng, Bitti yoki tashlab boldim deb yozing.",
     }.get(lang, '✅ Received. Keep sending. Write Done when finished.')
 
 
