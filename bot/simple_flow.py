@@ -610,7 +610,7 @@ def build_collect_prompt(lang: str, service_def, items: list) -> str:
     hint = {
         'en': "\n\nWhen you have sent everything, reply Done.",
         'ru': '\n\nКогда всё отправите, напишите Готово.',
-        'uz': "\n\nHammani yuborganingizdan so'ng, Bitti yoki tashlab boldim deb yozing.",
+        'uz': "\n\nHammasini yuborganingizdan so'ng, Bitti yoki tashlab boldim deb yozing.",
     }.get(lang, '')
     return f'{intro}\n\n{numbered}{hint}'
 
