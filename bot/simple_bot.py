@@ -194,7 +194,6 @@ def _handle_collecting(chat_id: int, uid: int, tg_user: types.User,
             bot.send_message(chat_id, build_ack(lang))
     elif file_label:
         case.add_message('user', f'[{file_label}]')
-        bot.send_message(chat_id, build_ack(lang))
 
 
 # ── /start ─────────────────────────────────────────────────────────────────────

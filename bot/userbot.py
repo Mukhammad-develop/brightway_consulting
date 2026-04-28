@@ -494,7 +494,6 @@ async def _ub_handle_collecting(client: TelegramClient, chat_id: int,
             await client.send_message(chat_id, build_ack(lang))
     elif file_label:
         await run_sync(lambda: case.add_message('user', f'[{file_label}]'))
-        await client.send_message(chat_id, build_ack(lang))
 
 
 # ============== Handler Registration ==============
