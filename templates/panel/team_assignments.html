@@ -18,8 +18,24 @@
                     {% for assignment in assignments %}
                     <div class="assignment-row">
                         <div class="user-info">
-                            <strong>{{ assignment.user }}</strong>
+                            <div class="user-name-row">
+                                <strong class="user-fullname">
+                                    {{ assignment.user.first_name|default:"" }} {{ assignment.user.last_name|default:"" }}
+                                </strong>
+                                {% if assignment.active_case %}
+                                <span class="case-badge badge-{{ assignment.active_case.service }}">
+                                    {% if assignment.active_case.service_definition %}
+                                        {{ assignment.active_case.service_definition.name }}
+                                    {% else %}
+                                        {{ assignment.active_case.get_service_display }}
+                                    {% endif %}
+                                </span>
+                                {% endif %}
+                            </div>
                             <span class="user-id">ID: {{ assignment.user.telegram_id }}</span>
+                            {% if assignment.user.username %}
+                            <span class="user-username">@{{ assignment.user.username }}</span>
+                            {% endif %}
                         </div>
                         <div class="assignment-meta">
                             <span>Since {{ assignment.assigned_at|date:"M d, Y" }}</span>
@@ -54,7 +70,11 @@
                         <select name="user_id" class="form-select" required>
                             <option value="">-- Select a user --</option>
                             {% for user in unassigned_users %}
-                            <option value="{{ user.pk }}">{{ user }} (ID: {{ user.telegram_id }})</option>
+                            <option value="{{ user.pk }}">
+                                {{ user.first_name|default:"" }} {{ user.last_name|default:"" }}
+                                {% if user.username %}(@{{ user.username }}){% endif %}
+                                — ID: {{ user.telegram_id }}
+                            </option>
                             {% endfor %}
                         </select>
                         <small>Showing up to 50 most recent unassigned users</small>
@@ -68,13 +88,45 @@
 </div>
 
 <style>
-.assignments-container { max-width: 900px; }
+.assignments-container { max-width: 960px; }
 .assignments-grid { display: grid; grid-template-columns: 1fr 350px; gap: 1.5rem; }
-.assignments-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 500px; overflow-y: auto; }
-.assignment-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; }
-.user-info { display: flex; flex-direction: column; }
-.user-info strong { margin-bottom: 0.25rem; }
+.assignments-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 600px; overflow-y: auto; }
+.assignment-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.85rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    transition: background 0.15s;
+}
+.assignment-row:hover { background: var(--bg-secondary); }
+.user-info { display: flex; flex-direction: column; gap: 2px; }
+.user-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.user-fullname { font-size: 1rem; }
 .user-id { font-size: 0.8rem; color: var(--text-muted); }
+.user-username { font-size: 0.8rem; color: var(--primary-color); }
+.case-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.badge-paye { background: #1e6f5c22; color: #1e6f5c; border: 1px solid #1e6f5c44; }
+.badge-self { background: #4a90d922; color: #4a90d9; border: 1px solid #4a90d944; }
+.badge-student { background: #7c3aed22; color: #7c3aed; border: 1px solid #7c3aed44; }
+.badge-schengen { background: #e6823722; color: #e68237; border: 1px solid #e6823744; }
+.badge-company { background: #d9534f22; color: #d9534f; border: 1px solid #d9534f44; }
+.badge-general { background: #6c757d22; color: #6c757d; border: 1px solid #6c757d44; }
+body[data-theme="dark"] .badge-paye { background: #1e6f5c33; color: #5cd3b3; }
+body[data-theme="dark"] .badge-self { background: #4a90d933; color: #7cb9f5; }
+body[data-theme="dark"] .badge-student { background: #7c3aed33; color: #b794f4; }
+body[data-theme="dark"] .badge-schengen { background: #e6823733; color: #f0a869; }
+body[data-theme="dark"] .badge-company { background: #d9534f33; color: #f09090; }
+body[data-theme="dark"] .badge-general { background: #6c757d33; color: #adb5bd; }
 .assignment-meta { display: flex; align-items: center; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary); }
 @media (max-width: 800px) { .assignments-grid { grid-template-columns: 1fr; } }
 </style>

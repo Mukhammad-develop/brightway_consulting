@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count
 
-from core.models import AdminUser, AdminAssignment, TgUser, ServiceDefinition
+from core.models import AdminUser, AdminAssignment, TgUser, ServiceDefinition, Case
 from ..decorators import login_required, master_required
 from .helpers import session_ctx, hash_password
 from .notifications import notify_masters
@@ -269,9 +269,15 @@ def team_assignments(request, admin_id):
         
         return redirect('panel:team_assignments', admin_id=admin_id)
     
-    # Get current assignments
+    # Get current assignments with user's active case info
     assignments = AdminAssignment.objects.filter(admin=admin).select_related('user')
-    
+    # Attach active case to each assignment for template display
+    assignment_list = []
+    for a in assignments:
+        active_case = Case.objects.filter(user=a.user, status='active').select_related('service_definition').first()
+        a.active_case = active_case
+        assignment_list.append(a)
+
     # Get unassigned users (not assigned to this admin)
     assigned_user_ids = assignments.values_list('user_id', flat=True)
     unassigned_users = TgUser.objects.exclude(pk__in=assigned_user_ids).order_by('-created_at')[:50]
@@ -279,7 +285,7 @@ def team_assignments(request, admin_id):
     context = {
         'page_title': f'Assignments: {admin.display_name or admin.username}',
         'admin_user': admin,
-        'assignments': assignments,
+        'assignments': assignment_list,
         'unassigned_users': unassigned_users,
         **session_ctx(request),
     }

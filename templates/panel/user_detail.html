@@ -335,7 +335,15 @@
                                     <img src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-photo" alt="Photo" loading="lazy">
                                 </a>
                                 {% elif msg.file_media_type == 'voice' %}
-                                <audio controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-audio"></audio>
+                                <div class="chat-voice-player" data-audio-src="{% url 'panel:file_view' msg.file_info.id %}">
+                                    <div class="voice-play-icon" onclick="toggleVoicePlay(this)">
+                                        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    </div>
+                                    <div class="voice-progress-wrap">
+                                        <div class="voice-progress-bar"><div class="voice-progress-fill"></div></div>
+                                        <span class="voice-duration-label">0:00</span>
+                                    </div>
+                                </div>
                                 {% elif msg.file_media_type == 'video' %}
                                 <video controls src="{% url 'panel:file_view' msg.file_info.id %}" class="chat-inline-video"></video>
                                 {% else %}
@@ -353,6 +361,14 @@
                                 {% if msg.content and msg.content != msg.file_filename and msg.content != '[Voice note transcription]: None' and '[FILE:' not in msg.content %}
                                     <div class="voice-transcription">{{ msg.content|linebreaksbr }}</div>
                                 {% endif %}
+                                <div class="msg-meta-inline">
+                                    {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
+                                </div>
+                            </div>
+                            {% elif '[FILE:' in msg.content %}
+                            {# FILE reference without a matching doc — show as minimal indicator #}
+                            <div class="msg-bubble msg-file-bubble">
+                                <div class="chat-file-card"><span class="chat-file-icon">📎</span><span class="chat-file-name">Attachment</span></div>
                                 <div class="msg-meta-inline">
                                     {% if msg.sender %}<span class="msg-author">{{ msg.sender }}</span> · {% endif %}{{ msg.timestamp|slice:":16" }}
                                 </div>

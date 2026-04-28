@@ -591,6 +591,10 @@ def send_message(request, user_id):
     # Add to conversation history
     active_case = Case.objects.filter(user=user, status='active').first()
     if active_case:
+        # Auto-disable AI when a consultant/admin starts writing
+        if active_case.ai_enabled:
+            active_case.ai_enabled = False
+            active_case.save(update_fields=['ai_enabled'])
         active_case.add_message('admin', text, sender_name)
     
     return JsonResponse({
@@ -654,6 +658,10 @@ def send_voice_message(request, user_id):
     active_case = Case.objects.filter(user=user, status='active').first()
     doc = None
     if active_case:
+        # Auto-disable AI when a consultant/admin starts writing
+        if active_case.ai_enabled:
+            active_case.ai_enabled = False
+            active_case.save(update_fields=['ai_enabled'])
         doc = Document.objects.create(
             case=active_case,
             file_path=filename,
@@ -732,6 +740,10 @@ def send_file_message(request, user_id):
     active_case = Case.objects.filter(user=user, status='active').first()
     doc = None
     if active_case:
+        # Auto-disable AI when a consultant/admin starts writing
+        if active_case.ai_enabled:
+            active_case.ai_enabled = False
+            active_case.save(update_fields=['ai_enabled'])
         doc = Document.objects.create(
             case=active_case,
             file_path=filename,

@@ -200,3 +200,41 @@ def consultant_mode_toggle_view(request):
     request.session['consultant_mode'] = not current
     next_url = request.GET.get('next') or request.META.get('HTTP_REFERER') or '/admin/'
     return redirect(next_url)
+
+
+@login_required
+@require_http_methods(['POST'])
+def generate_notification_code(request):
+    """Generate a 5-digit code for linking Telegram notification bot."""
+    import random
+    from datetime import datetime, timedelta
+    from django.http import JsonResponse
+
+    admin = get_current_admin(request)
+    if not admin:
+        return JsonResponse({'ok': False, 'error': 'No admin record found.'})
+
+    code = str(random.randint(10000, 99999))
+    admin.notification_code = code
+    admin.notification_code_expires = datetime.now() + timedelta(minutes=10)
+    admin.save(update_fields=['notification_code', 'notification_code_expires'])
+
+    return JsonResponse({'ok': True, 'code': code})
+
+
+@login_required
+@require_http_methods(['POST'])
+def disconnect_telegram(request):
+    """Disconnect the linked Telegram account for notifications."""
+    from django.http import JsonResponse
+
+    admin = get_current_admin(request)
+    if not admin:
+        return JsonResponse({'ok': False, 'error': 'No admin record found.'})
+
+    admin.telegram_chat_id = None
+    admin.notification_code = None
+    admin.notification_code_expires = None
+    admin.save(update_fields=['telegram_chat_id', 'notification_code', 'notification_code_expires'])
+
+    return JsonResponse({'ok': True})

@@ -77,5 +77,101 @@
             <button type="submit" class="btn btn-primary">Save profile</button>
         </div>
     </form>
+
+    {% if admin_user %}
+    <!-- Telegram Notification Bot -->
+    <div class="panel-card" style="margin-top: 1.5rem;">
+        <div class="card-header">📱 Telegram Notifications</div>
+        <div class="card-body">
+            {% if admin_user.telegram_chat_id %}
+            <div class="tg-linked-row">
+                <span class="tg-status-badge connected">✅ Connected</span>
+                <span class="tg-status-text">You will receive notifications via Telegram.</span>
+                <button type="button" class="btn btn-xs btn-outline" id="disconnectTgBtn">Disconnect</button>
+            </div>
+            {% else %}
+            <p style="margin-bottom:0.75rem; color:var(--text-secondary); font-size:0.9rem;">
+                Connect your Telegram account to receive case notifications instantly.
+            </p>
+            <div class="tg-link-flow" id="tgLinkFlow">
+                <button type="button" class="btn btn-primary btn-sm" id="generateCodeBtn">Generate Code</button>
+                <div id="tgCodeDisplay" style="display:none;">
+                    <div class="tg-code-box">
+                        <span class="tg-code-label">Your code:</span>
+                        <span class="tg-code-value" id="tgCodeValue"></span>
+                    </div>
+                    <p class="tg-code-instructions">
+                        Send this code to <strong>@BrightwayNotifyBot</strong> on Telegram within 10 minutes.
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<style>
+.tg-linked-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tg-status-badge { font-size: 0.85rem; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+.tg-status-badge.connected { background: #1e6f5c22; color: #1e6f5c; }
+body[data-theme="dark"] .tg-status-badge.connected { background: #1e6f5c33; color: #5cd3b3; }
+.tg-status-text { font-size: 0.85rem; color: var(--text-secondary); }
+.tg-code-box {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--bg-tertiary); border: 2px dashed var(--border-color);
+    padding: 12px 20px; border-radius: 10px; margin-top: 10px;
+}
+.tg-code-label { font-size: 0.85rem; color: var(--text-muted); }
+.tg-code-value { font-size: 1.8rem; font-weight: 700; letter-spacing: 6px; font-family: 'JetBrains Mono', monospace; color: var(--primary-color); }
+.tg-code-instructions { margin-top: 8px; font-size: 0.82rem; color: var(--text-secondary); }
+</style>
+
+<script>
+(function () {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    const genBtn = document.getElementById('generateCodeBtn');
+    const codeDisplay = document.getElementById('tgCodeDisplay');
+    const codeValue = document.getElementById('tgCodeValue');
+    const disconnectBtn = document.getElementById('disconnectTgBtn');
+
+    if (genBtn) {
+        genBtn.addEventListener('click', function () {
+            genBtn.disabled = true;
+            genBtn.textContent = 'Generating…';
+            fetch("{% url 'panel:generate_notification_code' %}", {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+            }).then(r => r.json()).then(data => {
+                if (data.ok) {
+                    codeValue.textContent = data.code;
+                    codeDisplay.style.display = 'block';
+                    genBtn.style.display = 'none';
+                } else {
+                    alert(data.error || 'Failed to generate code.');
+                    genBtn.disabled = false;
+                    genBtn.textContent = 'Generate Code';
+                }
+            }).catch(() => {
+                alert('Network error.');
+                genBtn.disabled = false;
+                genBtn.textContent = 'Generate Code';
+            });
+        });
+    }
+
+    if (disconnectBtn) {
+        disconnectBtn.addEventListener('click', function () {
+            if (!confirm('Disconnect Telegram notifications?')) return;
+            fetch("{% url 'panel:disconnect_telegram' %}", {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+            }).then(r => r.json()).then(data => {
+                if (data.ok) location.reload();
+                else alert(data.error || 'Failed.');
+            });
+        });
+    }
+})();
+</script>
 {% endblock %}

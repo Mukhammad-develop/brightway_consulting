@@ -16,6 +16,7 @@ from .helpers import session_ctx, get_current_admin
 def create_notification(admin_user, title, message, link=None):
     """
     Helper function to create a notification for an admin user.
+    Also sends via Telegram if the admin has a linked account.
     
     Args:
         admin_user: AdminUser instance or admin_id (int)
@@ -30,12 +31,21 @@ def create_notification(admin_user, title, message, link=None):
             return None
     
     if admin_user:
-        return Notification.objects.create(
+        notif = Notification.objects.create(
             admin_user=admin_user,
             title=title,
             message=message,
             link=link,
         )
+        # Also push via Telegram notification bot if linked
+        if admin_user.telegram_chat_id:
+            try:
+                from bot.notify_bot import send_notification
+                tg_text = f'🔔 *{title}*\n{message}'
+                send_notification(admin_user.pk, tg_text)
+            except Exception:
+                pass  # Don't block if bot is unavailable
+        return notif
     return None
 
 

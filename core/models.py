@@ -236,6 +236,12 @@ class AdminUser(models.Model):
         blank=True,
         related_name='responsible_admins',
     )
+    # Notification bot integration
+    telegram_chat_id = models.BigIntegerField(null=True, blank=True,
+        help_text='Telegram chat ID for receiving notifications via bot')
+    notification_code = models.CharField(max_length=10, null=True, blank=True,
+        help_text='Temporary 5-digit code for linking Telegram account')
+    notification_code_expires = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(default=datetime.now)
     last_login = models.DateTimeField(null=True, blank=True)
     
