@@ -51,14 +51,26 @@ if not NOTIFY_BOT_TOKEN:
 bot = telebot.TeleBot(NOTIFY_BOT_TOKEN)
 
 
+# ── Keyboards ────────────────────────────────────────────────────────────────
+
+def get_main_keyboard():
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(
+        telebot.types.KeyboardButton("📊 Status"),
+        telebot.types.KeyboardButton("🔌 Disconnect")
+    )
+    return markup
+
+def get_remove_keyboard():
+    return telebot.types.ReplyKeyboardRemove()
+
+
 # ── Commands Setup ───────────────────────────────────────────────────────────
 
 def setup_commands():
     try:
         commands = [
             telebot.types.BotCommand("start", "Start or restart the bot"),
-            telebot.types.BotCommand("status", "Check connection status"),
-            telebot.types.BotCommand("unlink", "Disconnect your account"),
         ]
         bot.set_my_commands(commands)
     except Exception as e:
@@ -78,8 +90,9 @@ def handle_start(message):
             f'👋 Welcome back, **{display}**!\n\n'
             f'✅ Your Telegram is already connected to the **{admin.username}** account.\n'
             f'You are receiving notifications for role: `{admin.role}`.\n\n'
-            'Use /status to check connection details or /unlink to disconnect.',
+            'Use the menu below to navigate.',
             parse_mode='Markdown',
+            reply_markup=get_main_keyboard()
         )
     else:
         bot.send_message(
@@ -89,12 +102,14 @@ def handle_start(message):
             'click **Generate Code**, then send the 5-digit code here.\n\n'
             'Example: `12345`',
             parse_mode='Markdown',
+            reply_markup=get_remove_keyboard()
         )
 
 
-# ── /status ──────────────────────────────────────────────────────────────────
+# ── Status ───────────────────────────────────────────────────────────────────
 
 @bot.message_handler(commands=['status'])
+@bot.message_handler(func=lambda m: m.text == '📊 Status')
 def handle_status(message):
     from core.models import AdminUser
     
@@ -110,6 +125,7 @@ def handle_status(message):
             f'🛡️ **Role:** {admin.role}\n\n'
             'You are receiving notifications for your assigned cases.',
             parse_mode='Markdown',
+            reply_markup=get_main_keyboard()
         )
     else:
         bot.send_message(
@@ -118,12 +134,14 @@ def handle_status(message):
             'You are not currently linked to any Brightway account.\n'
             'Send a 5-digit code from your admin Profile page to connect.',
             parse_mode='Markdown',
+            reply_markup=get_remove_keyboard()
         )
 
 
-# ── /unlink ──────────────────────────────────────────────────────────────────
+# ── Disconnect ───────────────────────────────────────────────────────────────
 
 @bot.message_handler(commands=['unlink'])
+@bot.message_handler(func=lambda m: m.text == '🔌 Disconnect')
 def handle_unlink(message):
     from core.models import AdminUser
     
@@ -138,12 +156,14 @@ def handle_unlink(message):
             'You will no longer receive notifications here. '
             'Send a new 5-digit code if you wish to reconnect.',
             parse_mode='Markdown',
+            reply_markup=get_remove_keyboard()
         )
-        logger.info('Admin %s unlinked from chat_id %d via bot command', username, message.chat.id)
+        logger.info('Admin %s unlinked from chat_id %d via bot', username, message.chat.id)
     else:
         bot.send_message(
             message.chat.id,
-            'You are not currently connected to any account.'
+            'You are not currently connected to any account.',
+            reply_markup=get_remove_keyboard()
         )
 
 
@@ -192,8 +212,9 @@ def handle_code(message):
         f'✅ Successfully connected!\n\n'
         f'👤 **Account:** {display} (@{admin.username})\n'
         f'🛡️ **Role:** {admin.role}\n\n'
-        f'You will now receive notifications here. Use /status anytime to check.',
+        f'You will now receive notifications here. Use the menu below to navigate.',
         parse_mode='Markdown',
+        reply_markup=get_main_keyboard()
     )
     logger.info('Linked admin %s (pk=%d) to chat_id %d', admin.username, admin.pk, chat_id)
 
@@ -209,14 +230,16 @@ def handle_other(message):
         bot.send_message(
             message.chat.id,
             f'You are connected to **{admin.username}**.\n'
-            'Use /status for info, or /unlink to disconnect.',
-            parse_mode='Markdown'
+            'Use the menu below to navigate.',
+            parse_mode='Markdown',
+            reply_markup=get_main_keyboard()
         )
     else:
         bot.send_message(
             message.chat.id,
             'ℹ️ Send your 5-digit code from the admin panel Profile page to connect.\n'
             'Type /start for instructions.',
+            reply_markup=get_remove_keyboard()
         )
 
 
