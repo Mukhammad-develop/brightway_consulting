@@ -51,18 +51,100 @@ if not NOTIFY_BOT_TOKEN:
 bot = telebot.TeleBot(NOTIFY_BOT_TOKEN)
 
 
+# ── Commands Setup ───────────────────────────────────────────────────────────
+
+def setup_commands():
+    try:
+        commands = [
+            telebot.types.BotCommand("start", "Start or restart the bot"),
+            telebot.types.BotCommand("status", "Check connection status"),
+            telebot.types.BotCommand("unlink", "Disconnect your account"),
+        ]
+        bot.set_my_commands(commands)
+    except Exception as e:
+        logger.error("Failed to set bot commands: %s", e)
+
 # ── /start ───────────────────────────────────────────────────────────────────
 
 @bot.message_handler(commands=['start'])
 def handle_start(message):
-    bot.send_message(
-        message.chat.id,
-        '👋 Welcome to Brightway Notifications!\n\n'
-        'To connect your account, go to your **Profile** page in the admin panel, '
-        'click **Generate Code**, then send the 5-digit code here.\n\n'
-        'Example: `12345`',
-        parse_mode='Markdown',
-    )
+    from core.models import AdminUser
+    
+    admin = AdminUser.objects.filter(telegram_chat_id=message.chat.id).first()
+    if admin:
+        display = admin.display_name or admin.username
+        bot.send_message(
+            message.chat.id,
+            f'👋 Welcome back, **{display}**!\n\n'
+            f'✅ Your Telegram is already connected to the **{admin.username}** account.\n'
+            f'You are receiving notifications for role: `{admin.role}`.\n\n'
+            'Use /status to check connection details or /unlink to disconnect.',
+            parse_mode='Markdown',
+        )
+    else:
+        bot.send_message(
+            message.chat.id,
+            '👋 Welcome to Brightway Notifications!\n\n'
+            'To connect your account, go to your **Profile** page in the admin panel, '
+            'click **Generate Code**, then send the 5-digit code here.\n\n'
+            'Example: `12345`',
+            parse_mode='Markdown',
+        )
+
+
+# ── /status ──────────────────────────────────────────────────────────────────
+
+@bot.message_handler(commands=['status'])
+def handle_status(message):
+    from core.models import AdminUser
+    
+    admin = AdminUser.objects.filter(telegram_chat_id=message.chat.id).first()
+    if admin:
+        display = admin.display_name or admin.username
+        bot.send_message(
+            message.chat.id,
+            f'📊 **Connection Status**\n\n'
+            f'🟢 **Status:** Connected\n'
+            f'👤 **Name:** {display}\n'
+            f'🔑 **Username:** {admin.username}\n'
+            f'🛡️ **Role:** {admin.role}\n\n'
+            'You are receiving notifications for your assigned cases.',
+            parse_mode='Markdown',
+        )
+    else:
+        bot.send_message(
+            message.chat.id,
+            '🔴 **Not Connected**\n\n'
+            'You are not currently linked to any Brightway account.\n'
+            'Send a 5-digit code from your admin Profile page to connect.',
+            parse_mode='Markdown',
+        )
+
+
+# ── /unlink ──────────────────────────────────────────────────────────────────
+
+@bot.message_handler(commands=['unlink'])
+def handle_unlink(message):
+    from core.models import AdminUser
+    
+    admin = AdminUser.objects.filter(telegram_chat_id=message.chat.id).first()
+    if admin:
+        username = admin.username
+        admin.telegram_chat_id = None
+        admin.save(update_fields=['telegram_chat_id'])
+        bot.send_message(
+            message.chat.id,
+            f'🔌 Disconnected from account **{username}**.\n\n'
+            'You will no longer receive notifications here. '
+            'Send a new 5-digit code if you wish to reconnect.',
+            parse_mode='Markdown',
+        )
+        logger.info('Admin %s unlinked from chat_id %d via bot command', username, message.chat.id)
+    else:
+        bot.send_message(
+            message.chat.id,
+            'You are not currently connected to any account.'
+        )
 
 
 # ── Code verification ────────────────────────────────────────────────────────
@@ -74,6 +156,9 @@ def handle_code(message):
     code = message.text.strip()
     chat_id = message.chat.id
     now = datetime.now()
+
+    # Check if this telegram account is already linked to someone else
+    existing_admin = AdminUser.objects.filter(telegram_chat_id=chat_id).first()
 
     try:
         admin = AdminUser.objects.get(notification_code=code)
@@ -89,6 +174,12 @@ def handle_code(message):
         admin.save(update_fields=['notification_code', 'notification_code_expires'])
         return
 
+    # If linked to a DIFFERENT account previously, disconnect the old one
+    if existing_admin and existing_admin.pk != admin.pk:
+        existing_admin.telegram_chat_id = None
+        existing_admin.save(update_fields=['telegram_chat_id'])
+        logger.info('Unlinked previous admin %s from chat_id %d', existing_admin.username, chat_id)
+
     # Link the account
     admin.telegram_chat_id = chat_id
     admin.notification_code = None
@@ -98,7 +189,10 @@ def handle_code(message):
     display = admin.display_name or admin.username
     bot.send_message(
         chat_id,
-        f'✅ Connected! Hi **{display}**, you will now receive notifications here.',
+        f'✅ Successfully connected!\n\n'
+        f'👤 **Account:** {display} (@{admin.username})\n'
+        f'🛡️ **Role:** {admin.role}\n\n'
+        f'You will now receive notifications here. Use /status anytime to check.',
         parse_mode='Markdown',
     )
     logger.info('Linked admin %s (pk=%d) to chat_id %d', admin.username, admin.pk, chat_id)
@@ -108,11 +202,22 @@ def handle_code(message):
 
 @bot.message_handler(func=lambda m: True)
 def handle_other(message):
-    bot.send_message(
-        message.chat.id,
-        'ℹ️ Send your 5-digit code from the admin panel Profile page to connect.\n'
-        'Type /start for instructions.',
-    )
+    from core.models import AdminUser
+    
+    admin = AdminUser.objects.filter(telegram_chat_id=message.chat.id).first()
+    if admin:
+        bot.send_message(
+            message.chat.id,
+            f'You are connected to **{admin.username}**.\n'
+            'Use /status for info, or /unlink to disconnect.',
+            parse_mode='Markdown'
+        )
+    else:
+        bot.send_message(
+            message.chat.id,
+            'ℹ️ Send your 5-digit code from the admin panel Profile page to connect.\n'
+            'Type /start for instructions.',
+        )
 
 
 # ── Helper: send a notification to a linked admin ────────────────────────────
@@ -165,6 +270,7 @@ def run():
     me = bot.get_me()
     logger.info('Notification bot started: @%s', me.username)
     print(f'Notification bot started: @{me.username}')
+    setup_commands()
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
 
 
