@@ -115,10 +115,38 @@ The Django site works without the bot. To run the **Telegram bot** and **userbot
 - **Paid account**: Use **Tasks** or an **Always-on task** to run:
   - `python manage.py run_bot` (Telegram bot)
   - `python manage.py run_userbot` (userbot for sending/receiving as your Telegram account)
+  - `python manage.py run_control_bot` (consultant control bot — see below)
 
 Add to `.env` on PythonAnywhere if the bots run here:
 
 - `BOT_TOKEN`, `OPENAI_API_KEY`, `TG_API_ID`, `TG_API_HASH`, `TG_PHONE` (and optionally second account vars).
+- `CONTROL_BOT_TOKEN` — token of the consultant control bot (@bwc_management_bot).
+
+### Consultant control bot (stop/resume the bot per client chat)
+
+The control bot lets consultants stop the AI in a specific client chat directly
+from Telegram — e.g. when a client writes off-script and a human takes over.
+
+Always-on task command:
+
+```
+/home/abdurakhmon70/brightway_consulting/venv/bin/python /home/abdurakhmon70/brightway_consulting/manage.py run_control_bot
+```
+
+How consultants use it:
+
+1. Link Telegram once: admin panel → Profile → Generate Code → send the
+   5-digit code to the control bot (consultants already linked to the
+   notification bot are authorised automatically).
+2. Forward any message from the client's chat to the control bot (or send the
+   client's @username / Telegram ID).
+3. Use the menu: **⏸ Stop bot** (bot goes silent in that chat),
+   **🙋 Take over** (stop + assign the case to yourself),
+   **▶️ Resume bot** (turn the bot back on), **🔄 Refresh**.
+
+Stopping sets `ai_enabled=False` on the client's active case — the same flag
+the userbot checks before replying, so it takes effect immediately without
+restarting the userbot.
 
 Then in the Web app or a separate console, run the commands above (or configure an Always-on task that runs one of them).
 

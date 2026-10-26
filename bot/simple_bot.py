@@ -35,13 +35,13 @@ from .simple_flow import (
     get_state, set_state, clear_state,
     get_active_subjects, get_services_for_subject,
     db_get_or_create_user, db_get_or_open_case, db_link_case_to_service,
-    db_try_assign_consultant, db_notify_consultant, db_finalise_case,
+    db_try_assign_consultant, db_notify_consultant, db_finalise_case, db_is_ai_disabled,
     detect_lang, ai_match_subject, ai_match_service,
     is_done_message, generate_final_message, wants_consultant, is_confirm_yes, is_confirm_no,
     build_greeting, build_service_list, build_collect_prompt,
     build_not_understood, build_no_services, build_ack, build_already_submitted,
     build_consultant_confirm, build_consultant_declined,
-    ai_contextual_reply, ai_answer_question,
+    ai_contextual_reply, find_faq_answer, get_faq_redirect_text,
 )
 
 logging.basicConfig(
@@ -108,6 +108,26 @@ def _typing_loop(chat_id: int, stop_event: threading.Event, interval: int = 4) -
 
 
 # ── Flow actions ──────────────────────────────────────────────────────────────
+
+def _log_if_stopped(message: types.Message, content: str = None) -> bool:
+    """
+    If a consultant has stopped the bot for this user (ai_enabled=False on the
+    active case), stay silent but log the message to the case. Returns True
+    when the bot is stopped and the caller must not continue the flow.
+    """
+    uid = message.from_user.id
+    if not db_is_ai_disabled(uid):
+        return False
+    try:
+        user, _ = db_get_or_create_user(uid, message.from_user.first_name, message.from_user.username)
+        case = db_get_or_open_case(user)
+        text = content if content is not None else (message.text or '')
+        if text:
+            case.add_message('user', text)
+    except Exception as e:
+        logger.debug('log-if-stopped failed for %s: %s', uid, e)
+    return True
+
 
 def _send_subject_selection(chat_id: int, uid: int, lang: str) -> None:
     subjects = get_active_subjects()
@@ -186,10 +206,11 @@ def _handle_collecting(chat_id: int, uid: int, tg_user: types.User,
                 svc_def = ServiceDefinition.objects.get(pk=svc_id)
             except Exception:
                 pass
-        ai_reply = ai_answer_question(text, svc_def, lang)
-        if ai_reply:
-            case.add_message('assistant', ai_reply)
-            bot.send_message(chat_id, ai_reply)
+        is_question, faq_answer = find_faq_answer(text, svc_def, lang)
+        if is_question:
+            reply = faq_answer or get_faq_redirect_text(lang)
+            case.add_message('assistant', reply)
+            bot.send_message(chat_id, reply)
         else:
             bot.send_message(chat_id, build_ack(lang))
     elif file_label:
@@ -200,6 +221,8 @@ def _handle_collecting(chat_id: int, uid: int, tg_user: types.User,
 
 @bot.message_handler(commands=['start'])
 def handle_start(message: types.Message) -> None:
+    if _log_if_stopped(message, '/start'):
+        return
     uid = message.from_user.id
     clear_state(uid)
     tg_lang = (getattr(message.from_user, 'language_code', None) or 'en')[:2].lower()
@@ -211,6 +234,8 @@ def handle_start(message: types.Message) -> None:
 
 @bot.message_handler(content_types=['text'])
 def handle_text(message: types.Message) -> None:
+    if _log_if_stopped(message):
+        return
     uid = message.from_user.id
     text = message.text.strip()
     state = get_state(uid)
@@ -296,6 +321,8 @@ def handle_text(message: types.Message) -> None:
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message: types.Message) -> None:
+    if _log_if_stopped(message, '[Photo]'):
+        return
     from core.models import Document
     uid = message.from_user.id
     state = get_state(uid)
@@ -332,6 +359,8 @@ def handle_photo(message: types.Message) -> None:
 
 @bot.message_handler(content_types=['document'])
 def handle_document(message: types.Message) -> None:
+    if _log_if_stopped(message, f"[File: {getattr(message.document, 'file_name', None) or 'document'}]"):
+        return
     from core.models import Document, Case
     uid = message.from_user.id
     state = get_state(uid)
@@ -384,6 +413,8 @@ def handle_document(message: types.Message) -> None:
 
 @bot.message_handler(content_types=['voice', 'audio'])
 def handle_voice(message: types.Message) -> None:
+    if _log_if_stopped(message, '[Voice]'):
+        return
     from core.models import Document, Case
     uid = message.from_user.id
     state = get_state(uid)
@@ -432,6 +463,8 @@ def handle_voice(message: types.Message) -> None:
 @bot.callback_query_handler(func=lambda c: c.data.startswith('simple_subject_'))
 def cb_subject(call: types.CallbackQuery) -> None:
     bot.answer_callback_query(call.id)
+    if db_is_ai_disabled(call.from_user.id):
+        return
     uid = call.from_user.id
     try:
         subject_id = int(call.data.split('_')[-1])
@@ -443,6 +476,8 @@ def cb_subject(call: types.CallbackQuery) -> None:
 @bot.callback_query_handler(func=lambda c: c.data.startswith('simple_service_'))
 def cb_service(call: types.CallbackQuery) -> None:
     bot.answer_callback_query(call.id)
+    if db_is_ai_disabled(call.from_user.id):
+        return
     uid = call.from_user.id
     try:
         service_id = int(call.data.split('_')[-1])

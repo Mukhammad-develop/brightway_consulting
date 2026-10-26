@@ -93,6 +93,17 @@ def db_save_user_language(tg_id: int, lang: str) -> None:
     TgUser.objects.filter(telegram_id=tg_id).update(language_code=lang)
 
 
+def db_is_ai_disabled(tg_id: int) -> bool:
+    """Return True if the user's active case has ai_enabled=False (consultant took over / bot stopped)."""
+    from core.models import Case, TgUser
+    try:
+        user = TgUser.objects.get(telegram_id=tg_id)
+        case = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
+        return bool(case and not case.ai_enabled)
+    except Exception:
+        return False
+
+
 def db_get_or_open_case(user, service_slug: str = 'general'):
     """Return the user's active case or create a new one."""
     from core.models import Case

@@ -47,7 +47,7 @@ from .simple_flow import (
     get_state, set_state, clear_state,
     get_active_subjects, get_services_for_subject,
     db_get_or_create_user, db_get_or_open_case, db_link_case_to_service,
-    db_flush_pending_messages, db_finalise_case, db_save_user_language,
+    db_flush_pending_messages, db_finalise_case, db_save_user_language, db_is_ai_disabled,
     detect_lang, ai_match_subject, ai_match_service,
     is_done_message, wants_consultant, is_confirm_yes, is_confirm_no,
     build_lang_select, parse_lang_choice, build_bot_intro,
@@ -154,13 +154,7 @@ def _set_linked_account(tg_id: int, account_index: int):
 
 def _check_ai_disabled(tg_id: int) -> bool:
     """Return True if the user's active case has ai_enabled=False (consultant mode)."""
-    from core.models import Case, TgUser
-    try:
-        user = TgUser.objects.get(telegram_id=tg_id)
-        case = Case.objects.filter(user=user, status='active').order_by('-updated_at').first()
-        return bool(case and not case.ai_enabled)
-    except Exception:
-        return False
+    return db_is_ai_disabled(tg_id)
 
 
 def _get_or_open_case(user, service='general'):
@@ -510,6 +504,12 @@ def register_handlers(client: TelegramClient, account_index: int):
             return
         try:
             sender = await event.get_sender()
+            # Bot stopped by a consultant — stay silent but log the message
+            if await run_sync(lambda: _check_ai_disabled(sender.id)):
+                user, _ = await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
+                case = await run_sync(lambda: _get_or_open_case(user))
+                await run_sync(lambda: case.add_message('user', event.text or '/start'))
+                return
             uid = sender.id
             await run_sync(lambda: _get_or_create_user(sender.id, sender.first_name, sender.username))
             await run_sync(lambda: _set_linked_account(sender.id, account_index))
@@ -529,6 +529,8 @@ def register_handlers(client: TelegramClient, account_index: int):
             return
         try:
             sender = await event.get_sender()
+            if await run_sync(lambda: _check_ai_disabled(sender.id)):
+                return
             user, _ = await run_sync(lambda: _get_or_create_user(sender.id))
             lang = user.language_code if user else 'en'
             await event.respond(t(lang, 'help'))
@@ -540,6 +542,9 @@ def register_handlers(client: TelegramClient, account_index: int):
     @client.on(events.CallbackQuery(pattern=b'simple_subject_'))
     async def cb_subject(event):
         try:
+            if await run_sync(lambda: _check_ai_disabled(event.sender_id)):
+                await event.answer()
+                return
             data = event.data.decode()
             subject_id = int(data.split('_')[-1])
             uid = event.sender_id
@@ -553,6 +558,9 @@ def register_handlers(client: TelegramClient, account_index: int):
     @client.on(events.CallbackQuery(pattern=b'simple_service_'))
     async def cb_service(event):
         try:
+            if await run_sync(lambda: _check_ai_disabled(event.sender_id)):
+                await event.answer()
+                return
             data = event.data.decode()
             service_id = int(data.split('_')[-1])
             uid = event.sender_id
@@ -567,6 +575,9 @@ def register_handlers(client: TelegramClient, account_index: int):
     @client.on(events.CallbackQuery(pattern=b'simple_lang_'))
     async def cb_lang(event):
         try:
+            if await run_sync(lambda: _check_ai_disabled(event.sender_id)):
+                await event.answer()
+                return
             lang = event.data.decode().split('_')[-1]  # 'en', 'ru', or 'uz'
             uid = event.sender_id
             # Record user's button tap in pending messages
@@ -585,6 +596,9 @@ def register_handlers(client: TelegramClient, account_index: int):
     async def handle_language_callback(event):
         from core.models import TgUser
         try:
+            if await run_sync(lambda: _check_ai_disabled(event.sender_id)):
+                await event.answer()
+                return
             lang_code = event.data.decode().replace('lang_', '')
             sender_id = event.sender_id
             await run_sync(lambda: TgUser.objects.filter(telegram_id=sender_id).update(language_code=lang_code))
